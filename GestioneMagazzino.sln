@@ -1,0 +1,50 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{8C6FFF14-C2A6-45FA-AF69-EB91FC8D8719}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Magazzino.Domain", "src\Magazzino.Domain\Magazzino.Domain.csproj", "{2FE847D0-8240-486F-B0AF-004D00FCF941}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Magazzino.Infrastructure", "src\Magazzino.Infrastructure\Magazzino.Infrastructure.csproj", "{E0A91E4A-48F7-482A-9A36-A63CFB55936E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Magazzino.Web", "src\Magazzino.Web\Magazzino.Web.csproj", "{6D8112E1-BBDC-4085-939B-344A8D0EE7D5}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{D1A92F31-2FC8-4CCD-8E9E-4A9BB9D4593A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Magazzino.Tests", "tests\Magazzino.Tests\Magazzino.Tests.csproj", "{D788C1FE-B8AA-4A83-A918-B4F4EE841011}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{2FE847D0-8240-486F-B0AF-004D00FCF941}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2FE847D0-8240-486F-B0AF-004D00FCF941}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2FE847D0-8240-486F-B0AF-004D00FCF941}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2FE847D0-8240-486F-B0AF-004D00FCF941}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E0A91E4A-48F7-482A-9A36-A63CFB55936E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E0A91E4A-48F7-482A-9A36-A63CFB55936E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E0A91E4A-48F7-482A-9A36-A63CFB55936E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E0A91E4A-48F7-482A-9A36-A63CFB55936E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6D8112E1-BBDC-4085-939B-344A8D0EE7D5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6D8112E1-BBDC-4085-939B-344A8D0EE7D5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6D8112E1-BBDC-4085-939B-344A8D0EE7D5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6D8112E1-BBDC-4085-939B-344A8D0EE7D5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D788C1FE-B8AA-4A83-A918-B4F4EE841011}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D788C1FE-B8AA-4A83-A918-B4F4EE841011}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D788C1FE-B8AA-4A83-A918-B4F4EE841011}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D788C1FE-B8AA-4A83-A918-B4F4EE841011}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{2FE847D0-8240-486F-B0AF-004D00FCF941} = {8C6FFF14-C2A6-45FA-AF69-EB91FC8D8719}
+		{E0A91E4A-48F7-482A-9A36-A63CFB55936E} = {8C6FFF14-C2A6-45FA-AF69-EB91FC8D8719}
+		{6D8112E1-BBDC-4085-939B-344A8D0EE7D5} = {8C6FFF14-C2A6-45FA-AF69-EB91FC8D8719}
+		{D788C1FE-B8AA-4A83-A918-B4F4EE841011} = {D1A92F31-2FC8-4CCD-8E9E-4A9BB9D4593A}
+	EndGlobalSection
+EndGlobal
