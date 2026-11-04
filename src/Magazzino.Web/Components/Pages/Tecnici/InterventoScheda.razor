@@ -1,0 +1,113 @@
+@page "/t/interventi/{Id:int}"
+@inject IDbContextFactory<MagazzinoDbContext> Dbf
+@inject Operazioni Op
+@inject TecnicoCorrente Tecnico
+@inject IConfiguration Config
+
+<PageTitle>Intervento</PageTitle>
+<Avviso Errore="@errore" Ok="@ok" />
+@if (i is null) { <p class="muted">Caricamento...</p> return; }
+
+<div class="card">
+    <div class="big">@i.Linea?.Nome @(i.Macchina is null ? "" : $"- {i.Macchina.Nome}")</div>
+    <div class="muted">@i.Codice - @i.Motivo - @i.Tecnico - dal @Formato.DataOra(i.Inizio)</div>
+    <div style="margin-top:.4rem"><PillIntervento Stato="i.Stato" /></div>
+</div>
+
+<h2>Pezzi prelevati</h2>
+@if (righe.Count == 0) { <p class="muted">Nessun pezzo.</p> }
+@foreach (var r in righe)
+{
+    var resa = r.Quantita - r.QuantitaResa;
+    <div class="card">
+        <div class="stock"><span><strong>@r.Ricambio?.Codice</strong> @r.Ricambio?.Descrizione</span><span class="n">@Formato.Q(resa)</span></div>
+        @if (r.QuantitaResa > 0) { <div class="muted">Prelevati @Formato.Q(r.Quantita), resi @Formato.Q(r.QuantitaResa)</div> }
+        @if (i.Stato == Magazzino.Domain.Scarico.StatoIntervento.InCorso && resa > 0)
+        {
+            @if (resoRiga == r.Id)
+            {
+                <div class="qty" style="margin-top:.6rem">
+                    <input type="number" step="any" min="0" max="@resa" @bind="qtaReso" />
+                    <button class="btn primary" style="width:auto; padding:0 1rem" @onclick="() => Rendi(r)">Rendi</button>
+                </div>
+            }
+            else
+            {
+                <button class="btn sm" style="margin-top:.5rem" @onclick="() => { resoRiga = r.Id; qtaReso = resa; }">Non l'ho usato: rimetti in magazzino</button>
+            }
+        }
+    </div>
+}
+
+@if (i.Stato == Magazzino.Domain.Scarico.StatoIntervento.InCorso)
+{
+    <a class="btn block" href="t">Preleva un altro pezzo per questo intervento</a>
+    <h2>Chiudi intervento</h2>
+    <label class="field">Cosa hai fatto<textarea rows="3" @bind="descrizione" @bind:event="oninput"></textarea></label>
+    <label class="field">Ore di lavoro<input type="number" step="0.25" min="0" @bind="ore" /></label>
+    <label class="field">Pezzo smontato
+        <select @bind="pezzo">
+            <option value="@DestinoPezzoSmontato.Nessuno">Nessuno</option>
+            <option value="@DestinoPezzoSmontato.DaRiparare">Da riparare</option>
+            <option value="@DestinoPezzoSmontato.DaSmaltire">Da smaltire</option>
+            <option value="@DestinoPezzoSmontato.RientroMagazzino">Torna in magazzino</option>
+        </select>
+    </label>
+    <button class="btn primary block" disabled="@string.IsNullOrWhiteSpace(descrizione)" @onclick="Completa">Chiudi intervento</button>
+}
+else
+{
+    <div class="card">
+        <div><strong>Lavoro fatto:</strong> @i.Descrizione</div>
+        <div class="muted">@Formato.Q(i.OreLavoro) ore. Ricambi @Formato.Euro(i.RicambiUsati.Sum(r => r.Quantita * r.CostoUnitario)), manodopera @Formato.Euro(i.CostoManodopera).</div>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private Intervento? i;
+    private List<RigaBuonoPrelievo> righe = [];
+    private string descrizione = "";
+    private decimal ore;
+    private DestinoPezzoSmontato pezzo;
+    private int resoRiga;
+    private decimal qtaReso;
+    private string? errore, ok;
+
+    protected override Task OnParametersSetAsync() => Carica();
+
+    private async Task Carica()
+    {
+        await using var db = await Dbf.CreateDbContextAsync();
+        i = await db.Interventi.Include(x => x.Linea).Include(x => x.Macchina).Include(x => x.RicambiUsati).AsNoTracking().FirstOrDefaultAsync(x => x.Id == Id);
+        if (i is null) { errore = "Intervento non trovato."; return; }
+        righe = await db.BuoniPrelievo.Where(b => b.InterventoId == Id).SelectMany(b => b.Righe).Include(r => r.Ricambio).OrderBy(r => r.Id).ToListAsync();
+    }
+
+    private async Task Rendi(RigaBuonoPrelievo r)
+    {
+        errore = ok = null;
+        try
+        {
+            await Tecnico.CaricaAsync();
+            await Op.EseguiAsync(sp => sp.GetRequiredService<ScaricoService>().RendiAsync(r.Id, qtaReso, Tecnico.Nome ?? "tecnico"));
+            ok = $"{Formato.Q(qtaReso)} {r.Ricambio?.Codice} rimessi in magazzino.";
+            resoRiga = 0;
+        }
+        catch (MagazzinoException ex) { errore = ex.Message; }
+        await Carica();
+    }
+
+    private async Task Completa()
+    {
+        errore = ok = null;
+        var costoOrario = Config.GetValue<decimal>("Magazzino:CostoOrario");
+        try
+        {
+            await Op.EseguiAsync(sp => sp.GetRequiredService<ScaricoService>().CompletaInterventoAsync(Id, ore, descrizione, pezzo, costoOrario));
+            ok = "Intervento chiuso.";
+        }
+        catch (MagazzinoException ex) { errore = ex.Message; }
+        await Carica();
+    }
+}

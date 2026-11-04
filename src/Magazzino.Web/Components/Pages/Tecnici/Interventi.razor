@@ -1,0 +1,41 @@
+@page "/t/interventi"
+@inject IDbContextFactory<MagazzinoDbContext> Dbf
+@inject TecnicoCorrente Tecnico
+
+<PageTitle>Interventi in corso</PageTitle>
+<ChiediNome Impostato="Carica" />
+<h1>Interventi in corso</h1>
+<label class="muted"><input type="checkbox" @bind="tutti" @bind:after="Carica" /> mostra anche quelli dei colleghi</label>
+
+@if (elenco is null) { <p class="muted">Caricamento...</p> }
+else if (elenco.Count == 0) { <p class="muted" style="margin-top:1rem">Nessun intervento in corso.</p> }
+else
+{
+    @foreach (var i in elenco)
+    {
+        <a class="card" style="display:block; text-decoration:none; color:inherit; margin-top:.8rem" href="t/interventi/@i.Id">
+            <div class="big">@i.Linea?.Nome @(i.Macchina is null ? "" : $"- {i.Macchina.Nome}")</div>
+            <div class="muted">@i.Codice - @i.Motivo - @i.Tecnico - dal @Formato.DataOra(i.Inizio)</div>
+            <div>@string.Join(", ", i.RicambiUsati.Select(r => $"{Formato.Q(r.Quantita)} x {r.Ricambio?.Codice}"))</div>
+        </a>
+    }
+}
+
+@code {
+    private List<Intervento>? elenco;
+    private bool tutti;
+
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        if (first) { await Tecnico.CaricaAsync(); await Carica(); StateHasChanged(); }
+    }
+
+    private async Task Carica()
+    {
+        await using var db = await Dbf.CreateDbContextAsync();
+        var q = db.Interventi.Include(i => i.Linea).Include(i => i.Macchina).Include(i => i.RicambiUsati).ThenInclude(r => r.Ricambio)
+            .Where(i => i.Stato == StatoIntervento.InCorso);
+        if (!tutti && !string.IsNullOrEmpty(Tecnico.Nome)) q = q.Where(i => i.Tecnico == Tecnico.Nome);
+        elenco = await q.OrderByDescending(i => i.Id).ToListAsync();
+    }
+}

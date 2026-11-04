@@ -1,0 +1,113 @@
+@page "/scatole"
+@inject IDbContextFactory<MagazzinoDbContext> Dbf
+@inject Operazioni Op
+@inject NavigationManager Nav
+
+<PageTitle>Scatole e QR - Magazzino</PageTitle>
+<h1>Scatole e QR</h1>
+<p class="muted">Ogni scatola contiene un solo ricambio e sta in un'ubicazione. Il tecnico inquadra il QR attaccato alla scatola con la fotocamera del telefono e apre subito il prelievo.</p>
+<Avviso Errore="@errore" Ok="@ok" />
+
+<div class="panel">
+    <div class="toolbar" style="margin:0">
+        <select @bind="ricambioId">
+            <option value="0">Ricambio...</option>
+            @foreach (var r in ricambi) {<option value="@r.Id">@r.Codice - @r.Descrizione</option>}
+        </select>
+        <select @bind="ubicazioneId">
+            <option value="0">Ubicazione...</option>
+            @foreach (var u in ubicazioni) {<option value="@u.Id">@u.Codice</option>}
+        </select>
+        <button class="btn primary" disabled="@(ricambioId == 0 || ubicazioneId == 0)" @onclick="Crea">Nuova scatola</button>
+        <span class="grow"></span>
+        <button class="btn" @onclick="CreaPerGiacenze">Crea le scatole mancanti per le giacenze</button>
+    </div>
+</div>
+
+<div class="toolbar">
+    <input class="grow" placeholder="Cerca codice scatola, ricambio o ubicazione" @bind="cerca" @bind:event="oninput" />
+    <button class="btn" disabled="@(selezionate.Count == 0)" @onclick="Stampa">Stampa etichette (@selezionate.Count)</button>
+</div>
+
+<table>
+    <thead><tr><th><input type="checkbox" @onchange="e => TutteLe((bool)e.Value!)" /></th><th>Scatola</th><th>Ricambio</th><th>Descrizione</th><th>Ubicazione</th><th class="n">Giacenza</th><th>Stato</th><th></th></tr></thead>
+    <tbody>
+        @foreach (var s in Filtrate)
+        {
+            <tr class="@(s.Attiva ? "" : "muted")">
+                <td><input type="checkbox" checked="@selezionate.Contains(s.Id)" @onchange="e => Seleziona(s.Id, (bool)e.Value!)" /></td>
+                <td><strong>@s.Codice</strong></td>
+                <td><a href="ricambi/@s.RicambioId">@s.Ricambio?.Codice</a></td>
+                <td>@s.Ricambio?.Descrizione</td>
+                <td>@s.Ubicazione?.Codice</td>
+                <td class="n">@Formato.Q(giacenze.GetValueOrDefault((s.RicambioId, s.UbicazioneId))) @s.Ricambio?.UnitaMisura</td>
+                <td>@(s.Attiva ? "in uso" : "dismessa")</td>
+                <td><button class="btn sm" @onclick="() => CambiaAttiva(s)">@(s.Attiva ? "Dismetti" : "Riattiva")</button></td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    private List<Scatola> scatole = [];
+    private List<Ricambio> ricambi = [];
+    private List<Ubicazione> ubicazioni = [];
+    private Dictionary<(int, int), decimal> giacenze = [];
+    private HashSet<int> selezionate = [];
+    private int ricambioId, ubicazioneId;
+    private string cerca = "";
+    private string? errore, ok;
+
+    private IEnumerable<Scatola> Filtrate => scatole.Where(s => cerca == ""
+        || s.Codice.Contains(cerca, StringComparison.OrdinalIgnoreCase)
+        || (s.Ricambio?.Codice.Contains(cerca, StringComparison.OrdinalIgnoreCase) ?? false)
+        || (s.Ricambio?.Descrizione.Contains(cerca, StringComparison.OrdinalIgnoreCase) ?? false)
+        || (s.Ubicazione?.Codice.Contains(cerca, StringComparison.OrdinalIgnoreCase) ?? false));
+
+    protected override Task OnInitializedAsync() => Carica();
+
+    private async Task Carica()
+    {
+        await using var db = await Dbf.CreateDbContextAsync();
+        ricambi = await db.Ricambi.Where(r => r.Attivo).OrderBy(r => r.Codice).ToListAsync();
+        ubicazioni = await db.Ubicazioni.Where(u => u.Attiva).OrderBy(u => u.Codice).ToListAsync();
+        scatole = await db.Scatole.Include(s => s.Ricambio).Include(s => s.Ubicazione).OrderByDescending(s => s.Attiva).ThenBy(s => s.Codice).ToListAsync();
+        giacenze = await db.Giacenze.ToDictionaryAsync(g => (g.RicambioId, g.UbicazioneId), g => g.Quantita);
+    }
+
+    private void Seleziona(int id, bool si) { if (si) selezionate.Add(id); else selezionate.Remove(id); }
+    private void TutteLe(bool si) => selezionate = si ? Filtrate.Where(s => s.Attiva).Select(s => s.Id).ToHashSet() : [];
+
+    private async Task Crea()
+    {
+        errore = ok = null;
+        try
+        {
+            var s = await Op.EseguiAsync(sp => sp.GetRequiredService<ScatoleService>().CreaAsync(ricambioId, ubicazioneId));
+            ok = $"Creata la scatola {s.Codice}: selezionala e stampa l'etichetta.";
+            await Carica();
+            selezionate = [s.Id];
+        }
+        catch (MagazzinoException ex) { errore = ex.Message; }
+    }
+
+    private async Task CreaPerGiacenze()
+    {
+        errore = ok = null;
+        var nuove = await Op.EseguiAsync(sp => sp.GetRequiredService<ScatoleService>().CreaPerGiacenzeSenzaScatolaAsync());
+        ok = nuove.Count == 0 ? "Tutte le giacenze hanno gia' una scatola." : $"Create {nuove.Count} scatole, gia' selezionate per la stampa.";
+        await Carica();
+        selezionate = nuove.Select(s => s.Id).ToHashSet();
+    }
+
+    private async Task CambiaAttiva(Scatola s)
+    {
+        await using var db = await Dbf.CreateDbContextAsync();
+        var t = await db.Scatole.FindAsync(s.Id);
+        t!.Attiva = !t.Attiva;
+        await db.SaveChangesAsync();
+        await Carica();
+    }
+
+    private void Stampa() => Nav.NavigateTo($"scatole/etichette?ids={string.Join(",", selezionate)}");
+}

@@ -21,7 +21,7 @@ else
                     <td class="n">@Formato.Q(m.Quantita)</td>
                     <td>@m.TipoDocumento @m.Note</td>
                     <td>@m.Utente</td>
-                    <td>@if (!m.Stornato && m.Tipo is not (TipoMovimento.Storno or TipoMovimento.Apertura or TipoMovimento.ScaricoIntervento or TipoMovimento.CaricoFornitore)) {<button class="btn sm danger" @onclick="() => Storna(m.Id)">Storna</button>}</td>
+                    <td>@if (!m.Stornato && m.Tipo is not (TipoMovimento.Storno or TipoMovimento.Apertura or TipoMovimento.ScaricoIntervento or TipoMovimento.CaricoFornitore or TipoMovimento.Reso)) {<button class="btn sm danger" @onclick="() => Storna(m.Id)">Storna</button>}</td>
                 </tr>
             }
         </tbody>
