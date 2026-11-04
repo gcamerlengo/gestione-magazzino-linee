@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Magazzino.Infrastructure\Magazzino.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Magazzino.Import\Magazzino.Import.csproj" />
   </ItemGroup>
 
 </Project>

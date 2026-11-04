@@ -12,6 +12,7 @@ Usato dall'ufficio da PC (browser) e dai tecnici in magazzino da smartphone e ta
 | --- | --- |
 | `src/Magazzino.Domain` | Entita': anagrafiche, carico (RDA, ordini fornitore, ricevimenti), scarico (buoni di prelievo, interventi), giacenze e movimenti |
 | `src/Magazzino.Infrastructure` | EF Core + PostgreSQL, migrazioni, servizi di dominio |
+| `src/Magazzino.Import` | Importatore una tantum da `manutenzione.db` di Gestione Manutenzione, con report |
 | `src/Magazzino.Web` | Web app Blazor (.NET 8) per ufficio e tecnici |
 | `tests/Magazzino.Tests` | Test dei servizi su SQLite in memoria |
 
@@ -40,6 +41,24 @@ dotnet test
 
 La stringa di connessione e' `ConnectionStrings:Magazzino` in `src/Magazzino.Web/appsettings.json`
 (in produzione va impostata con variabile d'ambiente `ConnectionStrings__Magazzino`).
+
+## Importazione da Gestione Manutenzione
+
+Si esegue una volta, su un database nuovo e vuoto. Il file `manutenzione.db` viene aperto in sola
+lettura; tutto avviene in una transazione (o entra tutto o niente) e alla fine viene scritto un
+report in Markdown con i conteggi, le giacenze che non tornavano e cosa non e' stato importato.
+
+```bash
+# prova: esegue tutto, scrive il report e annulla (nessun dato salvato)
+dotnet run --project src/Magazzino.Import -- "X:\SOFTWARE Aziendali\Gestione Manutenzioni\manutenzione.db" "Host=...;Database=magazzino;Username=...;Password=..." report.md --prova
+# importazione vera
+dotnet run --project src/Magazzino.Import -- "<manutenzione.db>" "<connessione>" report.md
+```
+
+Cosa viene importato: linee, macchine, fornitori (anche quelli scritti solo come testo sul ricambio),
+ubicazioni, ricambi, ricambi per macchina, giacenze per ubicazione (come movimenti di apertura),
+ordini fornitore con stato ricalcolato, interventi completati con i ricambi usati.
+Non ancora: piani preventivi e scadenze aperte (modulo scadenzario), ticket, utenti.
 
 ## Piano
 
