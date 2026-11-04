@@ -1,0 +1,35 @@
+@page "/"
+@using Magazzino.Infrastructure.Servizi
+@inject RiordinoService Riordino
+
+<PageTitle>Magazzino ricambi</PageTitle>
+
+<h1>Magazzino ricambi</h1>
+<p>Scheletro del progetto: le pagine di ordini, ricevimenti e prelievi arrivano nei passi 3 e 4.</p>
+
+<h2>Proposta di riordino</h2>
+@if (proposte is null)
+{
+    <p>Caricamento...</p>
+}
+else if (proposte.Count == 0)
+{
+    <p>Nessun ricambio sotto il punto di riordino.</p>
+}
+else
+{
+    <table>
+        <thead><tr><th>Codice</th><th>Descrizione</th><th>Disponibile</th><th>In arrivo</th><th>Punto riordino</th><th>Da ordinare</th></tr></thead>
+        <tbody>
+            @foreach (var p in proposte)
+            {
+                <tr><td>@p.Codice@(p.Critico ? " (critico)" : "")</td><td>@p.Descrizione</td><td>@p.Disponibile.ToString("0.##")</td><td>@p.InArrivo.ToString("0.##")</td><td>@p.PuntoRiordino.ToString("0.##")</td><td>@p.QuantitaProposta.ToString("0.##")</td></tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<PropostaRiordino>? proposte;
+    protected override async Task OnInitializedAsync() => proposte = await Riordino.ProponiAsync();
+}
