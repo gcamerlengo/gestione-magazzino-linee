@@ -1,0 +1,89 @@
+@page "/ricevimenti/nuovo/{OrdineId:int}"
+@inject IDbContextFactory<MagazzinoDbContext> Dbf
+@inject Operazioni Op
+@inject NavigationManager Nav
+
+<PageTitle>Arrivo merce - Magazzino</PageTitle>
+@if (o is null) { <p class="muted">Caricamento...</p> return; }
+
+<h1>Arrivo merce per l'ordine @o.Numero</h1>
+<p class="muted">@o.Fornitore?.RagioneSociale. Indica cosa e' arrivato davvero: una consegna parziale lascia l'ordine aperto per il residuo.</p>
+<Avviso Errore="@errore" />
+
+<div class="panel">
+    <div class="form">
+        <label>Numero DDT<input @bind="numeroDdt" /></label>
+        <label>Data DDT<input type="date" @bind="dataDdt" /></label>
+        <label style="grid-column: span 2">Note<input @bind="note" /></label>
+    </div>
+</div>
+
+<table>
+    <thead><tr><th>Codice</th><th>Descrizione</th><th class="n">Residuo</th><th class="n">Arrivato</th><th class="n">Prezzo</th><th>Ubicazione</th></tr></thead>
+    <tbody>
+        @foreach (var r in righe)
+        {
+            <tr>
+                <td>@r.Riga.Ricambio?.Codice</td>
+                <td>@r.Riga.Descrizione</td>
+                <td class="n">@Formato.Q(r.Riga.Residuo) @r.Riga.UnitaMisura</td>
+                <td class="n"><input type="number" step="any" min="0" @bind="r.Quantita" /></td>
+                <td class="n"><input type="number" step="any" min="0" @bind="r.Prezzo" /></td>
+                <td><select @bind="r.UbicazioneId">@foreach (var u in ubicazioni) {<option value="@u.Id">@u.Codice</option>}</select></td>
+            </tr>
+        }
+    </tbody>
+</table>
+@if (righe.Any(r => r.Riga.RicambioId is null)) { <p class="muted">Le righe senza ricambio in anagrafica non si possono caricare: collega prima il ricambio.</p> }
+
+<div class="toolbar" style="margin-top:1rem">
+    <button class="btn primary" disabled="@occupato" @onclick="Registra">Registra carico</button>
+    <a class="btn" href="ordini/@OrdineId">Annulla</a>
+</div>
+
+@code {
+    [Parameter] public int OrdineId { get; set; }
+    private class RigaUi
+    {
+        public required RigaOrdineFornitore Riga { get; init; }
+        public decimal Quantita { get; set; }
+        public decimal Prezzo { get; set; }
+        public int UbicazioneId { get; set; }
+    }
+    private OrdineFornitore? o;
+    private List<RigaUi> righe = [];
+    private List<Ubicazione> ubicazioni = [];
+    private string numeroDdt = "", note = "";
+    private DateTime dataDdt = DateTime.Today;
+    private string? errore;
+    private bool occupato;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await Dbf.CreateDbContextAsync();
+        o = await db.OrdiniFornitore.Include(x => x.Fornitore).Include(x => x.Righe).ThenInclude(r => r.Ricambio).AsNoTracking().FirstOrDefaultAsync(x => x.Id == OrdineId);
+        if (o is null) { errore = "Ordine non trovato."; return; }
+        ubicazioni = await db.Ubicazioni.Where(u => u.Attiva).OrderBy(u => u.Codice).ToListAsync();
+        var primo = ubicazioni.FirstOrDefault()?.Id ?? 0;
+        righe = o.Righe.Where(r => r.Residuo > 0 && r.RicambioId is not null).OrderBy(r => r.NumeroRiga).Select(r => new RigaUi
+        {
+            Riga = r, Quantita = r.Residuo, Prezzo = r.PrezzoUnitario, UbicazioneId = r.Ricambio?.UbicazionePredefinitaId ?? primo
+        }).ToList();
+        if (ubicazioni.Count == 0) errore = "Non ci sono ubicazioni attive: creane una prima di registrare un carico.";
+    }
+
+    private async Task Registra()
+    {
+        errore = null;
+        var daCaricare = righe.Where(r => r.Quantita > 0).Select(r => new RigaDaRicevere(r.Riga.RicambioId!.Value, r.UbicazioneId, r.Quantita, r.Prezzo, r.Riga.Id)).ToList();
+        if (righe.Any(r => r.Quantita < 0)) { errore = "Le quantita' non possono essere negative."; return; }
+        occupato = true;
+        try
+        {
+            await Op.EseguiAsync(sp => sp.GetRequiredService<CaricoService>().RegistraRicevimentoAsync(o!.FornitoreId, numeroDdt, dataDdt, daCaricare, UtenteCorrente.Nome, note));
+            Nav.NavigateTo($"ordini/{OrdineId}");
+        }
+        catch (MagazzinoException ex) { errore = ex.Message; }
+        finally { occupato = false; }
+    }
+}

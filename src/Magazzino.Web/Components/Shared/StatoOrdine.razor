@@ -1,0 +1,20 @@
+<span class="pill @Classe">@Testo</span>
+
+@code {
+    [Parameter, EditorRequired] public StatoOrdineFornitore Stato { get; set; }
+    private string Testo => Stato switch
+    {
+        StatoOrdineFornitore.DaApprovare => "Da approvare",
+        StatoOrdineFornitore.RicevutoInParte => "Ricevuto in parte",
+        _ => Stato.ToString()
+    };
+    private string Classe => Stato switch
+    {
+        StatoOrdineFornitore.Bozza => "pill-grey",
+        StatoOrdineFornitore.DaApprovare => "pill-warn",
+        StatoOrdineFornitore.Inviato or StatoOrdineFornitore.Confermato => "pill-blue",
+        StatoOrdineFornitore.RicevutoInParte => "pill-warn",
+        StatoOrdineFornitore.Ricevuto or StatoOrdineFornitore.Chiuso => "pill-ok",
+        _ => "pill-err"
+    };
+}

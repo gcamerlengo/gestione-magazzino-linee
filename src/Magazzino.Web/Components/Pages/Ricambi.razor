@@ -1,0 +1,59 @@
+@page "/ricambi"
+@inject IDbContextFactory<MagazzinoDbContext> Dbf
+
+<PageTitle>Ricambi - Magazzino</PageTitle>
+<h1>Ricambi</h1>
+
+<div class="toolbar">
+    <input class="grow" placeholder="Cerca per codice o descrizione" @bind="cerca" @bind:event="oninput" />
+    <label class="muted"><input type="checkbox" @bind="soloSotto" /> solo sotto riordino</label>
+    <a class="btn primary" href="ricambi/nuovo">Nuovo ricambio</a>
+</div>
+
+@if (righe is null)
+{
+    <p class="muted">Caricamento...</p>
+}
+else
+{
+    <table>
+        <thead><tr><th>Codice</th><th>Descrizione</th><th>Categoria</th><th class="n">Giacenza</th><th class="n">Punto riordino</th><th class="n">Costo medio</th><th>Fornitore</th></tr></thead>
+        <tbody>
+            @foreach (var r in Filtrate)
+            {
+                <tr class="@(r.Giacenza <= 0 && r.PuntoRiordino > 0 ? "zero" : r.Giacenza < r.PuntoRiordino ? "low" : "")">
+                    <td><a href="ricambi/@r.Id">@r.Codice</a>@if (r.Critico) {<span class="pill pill-err" style="margin-left:.4rem">critico</span>}</td>
+                    <td>@r.Descrizione</td>
+                    <td>@r.Categoria</td>
+                    <td class="n">@Formato.Q(r.Giacenza) @r.UnitaMisura</td>
+                    <td class="n">@Formato.Q(r.PuntoRiordino)</td>
+                    <td class="n">@Formato.Euro(r.CostoMedio)</td>
+                    <td>@r.Fornitore</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    <p class="muted">@Filtrate.Count() ricambi</p>
+}
+
+@code {
+    private record Riga(int Id, string Codice, string Descrizione, CategoriaRicambio Categoria, string UnitaMisura, decimal Giacenza,
+        decimal PuntoRiordino, decimal CostoMedio, string Fornitore, bool Critico);
+    private List<Riga>? righe;
+    private string cerca = "";
+    private bool soloSotto;
+
+    private IEnumerable<Riga> Filtrate => righe!
+        .Where(r => cerca == "" || r.Codice.Contains(cerca, StringComparison.OrdinalIgnoreCase) || r.Descrizione.Contains(cerca, StringComparison.OrdinalIgnoreCase))
+        .Where(r => !soloSotto || r.Giacenza < r.PuntoRiordino);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await Dbf.CreateDbContextAsync();
+        var giac = (await db.Giacenze.Select(g => new { g.RicambioId, g.Quantita }).ToListAsync())
+            .GroupBy(g => g.RicambioId).ToDictionary(g => g.Key, g => g.Sum(x => x.Quantita));
+        righe = (await db.Ricambi.Include(r => r.FornitorePreferito).Where(r => r.Attivo).OrderBy(r => r.Codice).ToListAsync())
+            .Select(r => new Riga(r.Id, r.Codice, r.Descrizione, r.Categoria, r.UnitaMisura, giac.GetValueOrDefault(r.Id), r.PuntoRiordino,
+                r.CostoMedio, r.FornitorePreferito?.RagioneSociale ?? "", r.Critico)).ToList();
+    }
+}

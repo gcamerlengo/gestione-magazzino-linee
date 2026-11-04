@@ -1,0 +1,97 @@
+@page "/giacenze"
+@inject IDbContextFactory<MagazzinoDbContext> Dbf
+@inject Operazioni Op
+
+<PageTitle>Giacenze - Magazzino</PageTitle>
+<h1>Giacenze per ubicazione</h1>
+<Avviso Errore="@errore" Ok="@ok" />
+
+<div class="toolbar">
+    <input class="grow" placeholder="Cerca ricambio o ubicazione" @bind="cerca" @bind:event="oninput" />
+    <span class="muted">Valore totale: @Formato.Euro(righe?.Sum(r => r.Quantita * (r.Ricambio?.CostoMedio ?? 0)) ?? 0)</span>
+</div>
+
+@if (righe is null) { <p class="muted">Caricamento...</p> }
+else
+{
+    <table>
+        <thead><tr><th>Ubicazione</th><th>Ricambio</th><th>Descrizione</th><th class="n">Quantita'</th><th class="n">Valore</th><th>Trasferisci</th></tr></thead>
+        <tbody>
+            @foreach (var g in righe.Where(Filtro))
+            {
+                <tr>
+                    <td>@g.Ubicazione?.Codice</td>
+                    <td><a href="ricambi/@g.RicambioId">@g.Ricambio?.Codice</a></td>
+                    <td>@g.Ricambio?.Descrizione</td>
+                    <td class="n">@Formato.Q(g.Quantita) @g.Ricambio?.UnitaMisura</td>
+                    <td class="n">@Formato.Euro(g.Quantita * (g.Ricambio?.CostoMedio ?? 0))</td>
+                    <td>
+                        @if (inTrasf == g)
+                        {
+                            <input type="number" step="any" @bind="qtaTrasf" />
+                            <select @bind="versoId">@foreach (var u in ubicazioni.Where(u => u.Id != g.UbicazioneId)) {<option value="@u.Id">@u.Codice</option>}</select>
+                            <button class="btn sm primary" @onclick="Trasferisci">OK</button>
+                            <button class="btn sm" @onclick="() => inTrasf = null">Annulla</button>
+                        }
+                        else if (ubicazioni.Count > 1)
+                        {
+                            <button class="btn sm" @onclick="() => ApriTrasf(g)">Sposta</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<Giacenza>? righe;
+    private List<Ubicazione> ubicazioni = [];
+    private string cerca = "";
+    private Giacenza? inTrasf;
+    private decimal qtaTrasf;
+    private int versoId;
+    private string? errore, ok;
+
+    private bool Filtro(Giacenza g) => cerca == ""
+        || (g.Ricambio?.Codice.Contains(cerca, StringComparison.OrdinalIgnoreCase) ?? false)
+        || (g.Ricambio?.Descrizione.Contains(cerca, StringComparison.OrdinalIgnoreCase) ?? false)
+        || (g.Ubicazione?.Codice.Contains(cerca, StringComparison.OrdinalIgnoreCase) ?? false);
+
+    protected override Task OnInitializedAsync() => Carica();
+
+    private async Task Carica()
+    {
+        await using var db = await Dbf.CreateDbContextAsync();
+        ubicazioni = await db.Ubicazioni.Where(u => u.Attiva).OrderBy(u => u.Codice).ToListAsync();
+        righe = (await db.Giacenze.Include(g => g.Ricambio).Include(g => g.Ubicazione).Where(g => g.Quantita != 0).ToListAsync())
+            .OrderBy(g => g.Ubicazione!.Codice).ThenBy(g => g.Ricambio!.Codice).ToList();
+    }
+
+    private void ApriTrasf(Giacenza g)
+    {
+        inTrasf = g; qtaTrasf = g.Quantita;
+        versoId = ubicazioni.First(u => u.Id != g.UbicazioneId).Id;
+    }
+
+    private async Task Trasferisci()
+    {
+        errore = ok = null;
+        var g = inTrasf!;
+        try
+        {
+            await Op.EseguiAsync(async sp =>
+            {
+                var db = sp.GetRequiredService<MagazzinoDbContext>();
+                var ric = await db.Ricambi.FindAsync(g.RicambioId) ?? throw new MagazzinoException("Ricambio inesistente.");
+                await sp.GetRequiredService<GiacenzeService>().TrasferisciAsync(ric, g.UbicazioneId, versoId, qtaTrasf, UtenteCorrente.Nome);
+                await db.SaveChangesAsync();
+            });
+            ok = "Trasferimento registrato.";
+            inTrasf = null;
+            await Carica();
+        }
+        catch (MagazzinoException ex) { errore = ex.Message; }
+        catch (DbUpdateConcurrencyException) { errore = "La giacenza e' cambiata nel frattempo: ricarica e riprova."; await Carica(); }
+    }
+}

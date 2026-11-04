@@ -60,6 +60,19 @@ ubicazioni, ricambi, ricambi per macchina, giacenze per ubicazione (come movimen
 ordini fornitore con stato ricalcolato, interventi completati con i ricambi usati.
 Non ancora: piani preventivi e scadenze aperte (modulo scadenzario), ticket, utenti.
 
+## Pagine per l'ufficio
+
+| Pagina | Cosa si fa |
+| --- | --- |
+| Cruscotto | Ricambi da riordinare, critici a zero, ordini in ritardo e da approvare, valore magazzino; dalla proposta di riordino si creano gli ordini in bozza (uno per fornitore preferito) |
+| Ordini fornitore | Elenco per stato, nuova bozza, righe modificabili solo in bozza, conferma/approvazione, conferma fornitore, chiusura, annullamento |
+| Arrivo merce | Dal singolo ordine: numero e data DDT, quantita' arrivate (anche parziali), prezzo e ubicazione per riga |
+| Giacenze | Quantita' per ubicazione con valore, spostamento tra ubicazioni |
+| Movimenti | Ultimi movimenti con filtro per tipo, storno dei trasferimenti e delle rettifiche |
+| Ricambi, Fornitori, Ubicazioni | Anagrafiche |
+
+Gli accessi con utente e ruolo arrivano nel passo 4: per ora le operazioni sono registrate con l'utente `ufficio`.
+
 ## Piano
 
 1. Modello dati e progetto (questo scheletro)

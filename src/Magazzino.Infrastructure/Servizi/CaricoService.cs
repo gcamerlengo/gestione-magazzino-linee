@@ -19,7 +19,7 @@ public class CaricoService(MagazzinoDbContext db, GiacenzeService giacenze, Nume
         var r = new Ricevimento
         {
             Numero = (await numeratore.ProssimoAsync("RIC", DateTime.UtcNow)).Numero,
-            FornitoreId = fornitoreId, NumeroDdt = numeroDdt, DataDdt = dataDdt, RicevutoDa = utente, Note = note
+            FornitoreId = fornitoreId, NumeroDdt = numeroDdt.Trim(), DataDdt = OrdiniService.Utc(dataDdt), RicevutoDa = utente, Note = note
         };
         db.Ricevimenti.Add(r);
         await db.SaveChangesAsync();

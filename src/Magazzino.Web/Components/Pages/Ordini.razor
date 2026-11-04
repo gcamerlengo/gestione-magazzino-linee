@@ -1,0 +1,76 @@
+@page "/ordini"
+@inject IDbContextFactory<MagazzinoDbContext> Dbf
+@inject Operazioni Op
+@inject NavigationManager Nav
+
+<PageTitle>Ordini fornitore - Magazzino</PageTitle>
+<h1>Ordini fornitore</h1>
+<Avviso Errore="@errore" />
+
+<div class="toolbar">
+    <label class="muted">Stato
+        <select @bind="filtro">
+            <option value="aperti">Aperti</option>
+            <option value="tutti">Tutti</option>
+            @foreach (var s in Enum.GetValues<StatoOrdineFornitore>()) {<option value="@s">@s</option>}
+        </select>
+    </label>
+    <span class="grow"></span>
+    <select @bind="nuovoFornitoreId">
+        <option value="0">Nuovo ordine per...</option>
+        @foreach (var f in fornitori) {<option value="@f.Id">@f.RagioneSociale</option>}
+    </select>
+    <button class="btn primary" disabled="@(nuovoFornitoreId == 0)" @onclick="Nuovo">Crea bozza</button>
+</div>
+
+@if (ordini is null) { <p class="muted">Caricamento...</p> }
+else
+{
+    <table>
+        <thead><tr><th>Numero</th><th>Fornitore</th><th>Data</th><th>Consegna prevista</th><th class="n">Righe</th><th class="n">Totale</th><th>Stato</th></tr></thead>
+        <tbody>
+            @foreach (var o in ordini.Where(Mostra))
+            {
+                var tardi = o.DataConsegnaPrevista < DateTime.UtcNow.Date && o.Stato is StatoOrdineFornitore.Inviato or StatoOrdineFornitore.Confermato or StatoOrdineFornitore.RicevutoInParte;
+                <tr class="@(tardi ? "zero" : "")">
+                    <td><a href="ordini/@o.Id">@o.Numero</a></td><td>@o.Fornitore?.RagioneSociale</td><td>@Formato.Data(o.DataOrdine)</td>
+                    <td>@Formato.Data(o.DataConsegnaPrevista)@(tardi ? " (in ritardo)" : "")</td>
+                    <td class="n">@o.Righe.Count</td><td class="n">@Formato.Euro(o.Totale)</td><td><StatoOrdine Stato="o.Stato" /></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private static readonly StatoOrdineFornitore[] Chiusi = [StatoOrdineFornitore.Ricevuto, StatoOrdineFornitore.Chiuso, StatoOrdineFornitore.Annullato];
+    private List<OrdineFornitore>? ordini;
+    private List<Fornitore> fornitori = [];
+    private string filtro = "aperti";
+    private int nuovoFornitoreId;
+    private string? errore;
+
+    private bool Mostra(OrdineFornitore o) => filtro switch
+    {
+        "tutti" => true,
+        "aperti" => !Chiusi.Contains(o.Stato),
+        _ => o.Stato.ToString() == filtro
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await Dbf.CreateDbContextAsync();
+        fornitori = await db.Fornitori.Where(f => f.Attivo).OrderBy(f => f.RagioneSociale).ToListAsync();
+        ordini = await db.OrdiniFornitore.Include(o => o.Fornitore).Include(o => o.Righe).OrderByDescending(o => o.Id).ToListAsync();
+    }
+
+    private async Task Nuovo()
+    {
+        try
+        {
+            var o = await Op.EseguiAsync(sp => sp.GetRequiredService<OrdiniService>().CreaAsync(nuovoFornitoreId, [], null));
+            Nav.NavigateTo($"ordini/{o.Id}");
+        }
+        catch (MagazzinoException ex) { errore = ex.Message; }
+    }
+}

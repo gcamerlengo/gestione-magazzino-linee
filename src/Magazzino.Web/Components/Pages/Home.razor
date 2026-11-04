@@ -1,35 +1,113 @@
 @page "/"
-@using Magazzino.Infrastructure.Servizi
-@inject RiordinoService Riordino
+@inject IDbContextFactory<MagazzinoDbContext> Dbf
+@inject Operazioni Op
+@inject NavigationManager Nav
 
-<PageTitle>Magazzino ricambi</PageTitle>
+<PageTitle>Cruscotto - Magazzino</PageTitle>
+<h1>Cruscotto</h1>
+<Avviso Errore="@errore" Ok="@ok" />
 
-<h1>Magazzino ricambi</h1>
-<p>Scheletro del progetto: le pagine di ordini, ricevimenti e prelievi arrivano nei passi 3 e 4.</p>
-
-<h2>Proposta di riordino</h2>
 @if (proposte is null)
 {
-    <p>Caricamento...</p>
-}
-else if (proposte.Count == 0)
-{
-    <p>Nessun ricambio sotto il punto di riordino.</p>
+    <p class="muted">Caricamento...</p>
 }
 else
 {
-    <table>
-        <thead><tr><th>Codice</th><th>Descrizione</th><th>Disponibile</th><th>In arrivo</th><th>Punto riordino</th><th>Da ordinare</th></tr></thead>
-        <tbody>
-            @foreach (var p in proposte)
-            {
-                <tr><td>@p.Codice@(p.Critico ? " (critico)" : "")</td><td>@p.Descrizione</td><td>@p.Disponibile.ToString("0.##")</td><td>@p.InArrivo.ToString("0.##")</td><td>@p.PuntoRiordino.ToString("0.##")</td><td>@p.QuantitaProposta.ToString("0.##")</td></tr>
-            }
-        </tbody>
-    </table>
+    <div class="kpis">
+        <div class="kpi @(proposte.Count > 0 ? "warn" : "")"><div class="v">@proposte.Count</div><div class="l">Ricambi da riordinare</div></div>
+        <div class="kpi @(criticiAZero > 0 ? "err" : "")"><div class="v">@criticiAZero</div><div class="l">Ricambi critici a zero</div></div>
+        <div class="kpi @(ritardo.Count > 0 ? "err" : "")"><div class="v">@ritardo.Count</div><div class="l">Ordini in ritardo</div></div>
+        <div class="kpi"><div class="v">@daApprovare</div><div class="l">Ordini da approvare</div></div>
+        <div class="kpi"><div class="v">@Formato.Euro(valore)</div><div class="l">Valore magazzino</div></div>
+    </div>
+
+    <h2>Proposta di riordino</h2>
+    @if (proposte.Count == 0)
+    {
+        <p class="muted">Nessun ricambio sotto il punto di riordino.</p>
+    }
+    else
+    {
+        <div class="toolbar">
+            <span class="grow muted">Disponibile = giacenza meno impegnato. In arrivo = ordini aperti e richieste.</span>
+            <button class="btn primary" disabled="@(selezionati.Count == 0 || occupato)" @onclick="CreaOrdini">Crea ordini per i selezionati (@selezionati.Count)</button>
+        </div>
+        <table>
+            <thead><tr><th></th><th>Codice</th><th>Descrizione</th><th class="n">Disponibile</th><th class="n">In arrivo</th><th class="n">Punto riordino</th><th class="n">Da ordinare</th><th>Fornitore</th></tr></thead>
+            <tbody>
+                @foreach (var p in proposte)
+                {
+                    <tr class="@(p.Disponibile <= 0 ? "zero" : "low")">
+                        <td><input type="checkbox" disabled="@(p.FornitoreId is null)" checked="@selezionati.Contains(p.RicambioId)" @onchange="e => Seleziona(p.RicambioId, (bool)e.Value!)" /></td>
+                        <td><a href="ricambi/@p.RicambioId">@p.Codice</a>@if (p.Critico) {<span class="pill pill-err" style="margin-left:.4rem">critico</span>}</td>
+                        <td>@p.Descrizione</td>
+                        <td class="n">@Formato.Q(p.Disponibile)</td>
+                        <td class="n">@Formato.Q(p.InArrivo)</td>
+                        <td class="n">@Formato.Q(p.PuntoRiordino)</td>
+                        <td class="n">@Formato.Q(p.QuantitaProposta)</td>
+                        <td>@(p.FornitoreId is int f && fornitori.TryGetValue(f, out var n) ? n : "manca fornitore preferito")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (ritardo.Count > 0)
+    {
+        <h2>Ordini in ritardo</h2>
+        <table>
+            <thead><tr><th>Numero</th><th>Fornitore</th><th>Consegna prevista</th><th>Stato</th></tr></thead>
+            <tbody>
+                @foreach (var o in ritardo)
+                {
+                    <tr><td><a href="ordini/@o.Id">@o.Numero</a></td><td>@o.Fornitore?.RagioneSociale</td><td>@Formato.Data(o.DataConsegnaPrevista)</td><td><StatoOrdine Stato="o.Stato" /></td></tr>
+                }
+            </tbody>
+        </table>
+    }
 }
 
 @code {
     private List<PropostaRiordino>? proposte;
-    protected override async Task OnInitializedAsync() => proposte = await Riordino.ProponiAsync();
+    private List<OrdineFornitore> ritardo = [];
+    private Dictionary<int, string> fornitori = [];
+    private HashSet<int> selezionati = [];
+    private int criticiAZero, daApprovare;
+    private decimal valore;
+    private string? errore, ok;
+    private bool occupato;
+
+    protected override Task OnInitializedAsync() => Carica();
+
+    private async Task Carica()
+    {
+        proposte = await Op.EseguiAsync(sp => sp.GetRequiredService<RiordinoService>().ProponiAsync());
+        ritardo = await Op.EseguiAsync(sp => sp.GetRequiredService<OrdiniService>().InRitardoAsync(DateTime.UtcNow));
+        await using var db = await Dbf.CreateDbContextAsync();
+        fornitori = await db.Fornitori.ToDictionaryAsync(f => f.Id, f => f.RagioneSociale);
+        var giac = await db.Giacenze.Select(g => new { g.RicambioId, g.Quantita }).ToListAsync();
+        var perRic = giac.GroupBy(g => g.RicambioId).ToDictionary(g => g.Key, g => g.Sum(x => x.Quantita));
+        var ricambi = await db.Ricambi.Where(r => r.Attivo).Select(r => new { r.Id, r.Critico, r.CostoMedio }).ToListAsync();
+        criticiAZero = ricambi.Count(r => r.Critico && perRic.GetValueOrDefault(r.Id) <= 0);
+        valore = ricambi.Sum(r => perRic.GetValueOrDefault(r.Id) * r.CostoMedio);
+        daApprovare = await db.OrdiniFornitore.CountAsync(o => o.Stato == StatoOrdineFornitore.DaApprovare);
+        selezionati = proposte.Where(p => p.FornitoreId is not null).Select(p => p.RicambioId).ToHashSet();
+    }
+
+    private void Seleziona(int id, bool si) { if (si) selezionati.Add(id); else selezionati.Remove(id); }
+
+    private async Task CreaOrdini()
+    {
+        occupato = true; errore = ok = null;
+        try
+        {
+            var scelte = proposte!.Where(p => selezionati.Contains(p.RicambioId)).ToList();
+            var ordini = await Op.EseguiAsync(sp => sp.GetRequiredService<OrdiniService>().CreaDaProposteAsync(scelte));
+            if (ordini.Count == 1) { Nav.NavigateTo($"ordini/{ordini[0].Id}"); return; }
+            ok = $"Creati {ordini.Count} ordini in bozza: {string.Join(", ", ordini.Select(o => o.Numero))}.";
+            await Carica();
+        }
+        catch (MagazzinoException ex) { errore = ex.Message; }
+        finally { occupato = false; }
+    }
 }

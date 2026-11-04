@@ -1,0 +1,102 @@
+@page "/ricambi/nuovo"
+@page "/ricambi/{Id:int}"
+@inject IDbContextFactory<MagazzinoDbContext> Dbf
+@inject NavigationManager Nav
+
+<PageTitle>@(r?.Codice ?? "Ricambio") - Magazzino</PageTitle>
+<h1>@(Id is null ? "Nuovo ricambio" : $"{r?.Codice} {r?.Descrizione}")</h1>
+<Avviso Errore="@errore" Ok="@ok" />
+
+@if (r is not null)
+{
+    <div class="panel">
+        <div class="form">
+            <label>Codice interno<input @bind="r.Codice" /></label>
+            <label>Codice costruttore<input @bind="r.CodiceCostruttore" /></label>
+            <label style="grid-column: span 2">Descrizione<input @bind="r.Descrizione" /></label>
+            <label>Categoria
+                <select @bind="r.Categoria">@foreach (var c in Enum.GetValues<CategoriaRicambio>()) {<option value="@c">@c</option>}</select>
+            </label>
+            <label>Unita' di misura<input @bind="r.UnitaMisura" /></label>
+            <label>Scorta minima<input type="number" step="any" @bind="r.ScortaMinima" /></label>
+            <label>Punto di riordino<input type="number" step="any" @bind="r.PuntoRiordino" /></label>
+            <label>Quantita' di riordino<input type="number" step="any" @bind="r.QuantitaRiordino" /></label>
+            <label>Lead time (giorni)<input type="number" @bind="r.LeadTimeGiorni" /></label>
+            <label>Fornitore preferito
+                <select @bind="r.FornitorePreferitoId">
+                    <option value="">(nessuno)</option>
+                    @foreach (var f in fornitori) {<option value="@f.Id">@f.RagioneSociale</option>}
+                </select>
+            </label>
+            <label>Ubicazione predefinita
+                <select @bind="r.UbicazionePredefinitaId">
+                    <option value="">(nessuna)</option>
+                    @foreach (var u in ubicazioni) {<option value="@u.Id">@u.Codice</option>}
+                </select>
+            </label>
+            <label class="check"><input type="checkbox" @bind="r.Critico" /> Critico</label>
+            <label class="check"><input type="checkbox" @bind="r.AlimentareNsfH1" /> Alimentare NSF H1</label>
+            <label class="check"><input type="checkbox" @bind="r.Attivo" /> Attivo</label>
+            <label style="grid-column: 1 / -1">Note<textarea rows="2" @bind="r.Note"></textarea></label>
+        </div>
+        <p class="muted">Costo medio: @Formato.Euro(r.CostoMedio) (si aggiorna da solo a ogni carico da fornitore).</p>
+        <button class="btn primary" @onclick="Salva">Salva</button>
+        <a class="btn" href="ricambi">Torna all'elenco</a>
+    </div>
+
+    @if (Id is not null)
+    {
+        <h2>Giacenza per ubicazione</h2>
+        @if (giacenze.Count == 0) { <p class="muted">Nessuna giacenza.</p> }
+        else
+        {
+            <table>
+                <thead><tr><th>Ubicazione</th><th class="n">Quantita'</th><th>Ultimo movimento</th></tr></thead>
+                <tbody>@foreach (var g in giacenze) {<tr><td>@g.Ubicazione?.Codice</td><td class="n">@Formato.Q(g.Quantita) @r.UnitaMisura</td><td>@(g.UltimoMovimento is DateTime d ? Formato.DataOra(d) : "")</td></tr>}</tbody>
+            </table>
+        }
+        <h2>Ultimi movimenti</h2>
+        <MovimentiTabella RicambioId="Id" Massimo="20" />
+    }
+}
+
+@code {
+    [Parameter] public int? Id { get; set; }
+    private Ricambio? r;
+    private List<Fornitore> fornitori = [];
+    private List<Ubicazione> ubicazioni = [];
+    private List<Giacenza> giacenze = [];
+    private string? errore, ok;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await using var db = await Dbf.CreateDbContextAsync();
+        fornitori = await db.Fornitori.Where(f => f.Attivo).OrderBy(f => f.RagioneSociale).ToListAsync();
+        ubicazioni = await db.Ubicazioni.Where(u => u.Attiva).OrderBy(u => u.Codice).ToListAsync();
+        r = Id is int id ? await db.Ricambi.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id) : new Ricambio();
+        if (r is null) { errore = "Ricambio non trovato."; return; }
+        if (Id is int i2) giacenze = await db.Giacenze.Include(g => g.Ubicazione).Where(g => g.RicambioId == i2 && g.Quantita != 0).ToListAsync();
+    }
+
+    private async Task Salva()
+    {
+        errore = ok = null;
+        r!.Codice = r.Codice.Trim();
+        if (r.Codice == "" || r.Descrizione.Trim() == "") { errore = "Codice e descrizione sono obbligatori."; return; }
+        if (r.PuntoRiordino < 0 || r.ScortaMinima < 0 || r.QuantitaRiordino < 0) { errore = "Scorte e quantita' non possono essere negative."; return; }
+        await using var db = await Dbf.CreateDbContextAsync();
+        if (await db.Ricambi.AnyAsync(x => x.Codice == r.Codice && x.Id != r.Id)) { errore = $"Esiste gia' un ricambio con codice {r.Codice}."; return; }
+        if (r.Id == 0) db.Ricambi.Add(r);
+        else
+        {
+            // Si copiano solo i campi del modulo: il costo medio lo aggiornano i carichi, non va sovrascritto.
+            var t = await db.Ricambi.FindAsync(r.Id) ?? throw new InvalidOperationException("Ricambio eliminato.");
+            (t.Codice, t.CodiceCostruttore, t.Descrizione, t.Categoria, t.UnitaMisura) = (r.Codice, r.CodiceCostruttore, r.Descrizione.Trim(), r.Categoria, r.UnitaMisura);
+            (t.ScortaMinima, t.PuntoRiordino, t.QuantitaRiordino, t.LeadTimeGiorni) = (r.ScortaMinima, r.PuntoRiordino, r.QuantitaRiordino, r.LeadTimeGiorni);
+            (t.FornitorePreferitoId, t.UbicazionePredefinitaId, t.Critico, t.AlimentareNsfH1, t.Attivo, t.Note) = (r.FornitorePreferitoId, r.UbicazionePredefinitaId, r.Critico, r.AlimentareNsfH1, r.Attivo, r.Note);
+        }
+        await db.SaveChangesAsync();
+        if (Id is null) { Nav.NavigateTo($"ricambi/{r.Id}"); return; }
+        ok = "Salvato.";
+    }
+}

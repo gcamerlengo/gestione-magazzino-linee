@@ -1,0 +1,74 @@
+@page "/fornitori"
+@inject IDbContextFactory<MagazzinoDbContext> Dbf
+
+<PageTitle>Fornitori - Magazzino</PageTitle>
+<h1>Fornitori</h1>
+<Avviso Errore="@errore" Ok="@ok" />
+
+@if (edit is not null)
+{
+    <div class="panel">
+        <div class="form">
+            <label>Ragione sociale<input @bind="edit.RagioneSociale" /></label>
+            <label>Partita IVA<input @bind="edit.PartitaIva" /></label>
+            <label>Referente<input @bind="edit.Referente" /></label>
+            <label>Telefono<input @bind="edit.Telefono" /></label>
+            <label>Email ordini<input type="email" @bind="edit.EmailOrdini" /></label>
+            <label>Condizioni di pagamento<input @bind="edit.CondizioniPagamento" /></label>
+            <label class="check"><input type="checkbox" @bind="edit.Attivo" /> Attivo</label>
+            <label style="grid-column: 1 / -1">Note<textarea rows="2" @bind="edit.Note"></textarea></label>
+        </div>
+        <button class="btn primary" @onclick="Salva">Salva</button>
+        <button class="btn" @onclick="() => edit = null">Annulla</button>
+    </div>
+}
+else
+{
+    <div class="toolbar"><span class="grow"></span><button class="btn primary" @onclick="() => edit = new Fornitore()">Nuovo fornitore</button></div>
+}
+
+<table>
+    <thead><tr><th>Ragione sociale</th><th>Referente</th><th>Telefono</th><th>Email ordini</th><th>Stato</th><th></th></tr></thead>
+    <tbody>
+        @foreach (var f in elenco)
+        {
+            <tr class="@(f.Attivo ? "" : "muted")"><td>@f.RagioneSociale</td><td>@f.Referente</td><td>@f.Telefono</td><td>@f.EmailOrdini</td><td>@(f.Attivo ? "attivo" : "non attivo")</td>
+                <td><button class="btn sm" @onclick="() => edit = Copia(f)">Modifica</button></td></tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    private List<Fornitore> elenco = [];
+    private Fornitore? edit;
+    private string? errore, ok;
+
+    protected override Task OnInitializedAsync() => Carica();
+
+    private async Task Carica()
+    {
+        await using var db = await Dbf.CreateDbContextAsync();
+        elenco = await db.Fornitori.AsNoTracking().OrderByDescending(f => f.Attivo).ThenBy(f => f.RagioneSociale).ToListAsync();
+    }
+
+    private static Fornitore Copia(Fornitore f) => new()
+    {
+        Id = f.Id, RagioneSociale = f.RagioneSociale, PartitaIva = f.PartitaIva, Referente = f.Referente, Telefono = f.Telefono,
+        EmailOrdini = f.EmailOrdini, CondizioniPagamento = f.CondizioniPagamento, Attivo = f.Attivo, Note = f.Note, IdOrigine = f.IdOrigine,
+        CreatedAt = f.CreatedAt
+    };
+
+    private async Task Salva()
+    {
+        errore = ok = null;
+        edit!.RagioneSociale = edit.RagioneSociale.Trim();
+        if (edit.RagioneSociale == "") { errore = "La ragione sociale e' obbligatoria."; return; }
+        await using var db = await Dbf.CreateDbContextAsync();
+        if (await db.Fornitori.AnyAsync(f => f.RagioneSociale == edit.RagioneSociale && f.Id != edit.Id)) { errore = "Esiste gia' un fornitore con questo nome."; return; }
+        if (edit.Id == 0) db.Fornitori.Add(edit); else db.Fornitori.Update(edit);
+        await db.SaveChangesAsync();
+        ok = $"Fornitore {edit.RagioneSociale} salvato.";
+        edit = null;
+        await Carica();
+    }
+}
