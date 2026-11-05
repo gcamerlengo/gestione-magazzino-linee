@@ -1,4 +1,6 @@
 @page "/ricevimenti/nuovo/{OrdineId:int}"
+@attribute [Authorize(Policy = Permessi.Ufficio)]
+@inject UtenteCorrente Utente
 @inject IDbContextFactory<MagazzinoDbContext> Dbf
 @inject Operazioni Op
 @inject NavigationManager Nav
@@ -78,9 +80,10 @@
         var daCaricare = righe.Where(r => r.Quantita > 0).Select(r => new RigaDaRicevere(r.Riga.RicambioId!.Value, r.UbicazioneId, r.Quantita, r.Prezzo, r.Riga.Id)).ToList();
         if (righe.Any(r => r.Quantita < 0)) { errore = "Le quantita' non possono essere negative."; return; }
         occupato = true;
+        var chi = await Utente.NomeAsync();
         try
         {
-            await Op.EseguiAsync(sp => sp.GetRequiredService<CaricoService>().RegistraRicevimentoAsync(o!.FornitoreId, numeroDdt, dataDdt, daCaricare, UtenteCorrente.Nome, note));
+            await Op.EseguiAsync(sp => sp.GetRequiredService<CaricoService>().RegistraRicevimentoAsync(o!.FornitoreId, numeroDdt, dataDdt, daCaricare, chi, note));
             Nav.NavigateTo($"ordini/{OrdineId}");
         }
         catch (MagazzinoException ex) { errore = ex.Message; }

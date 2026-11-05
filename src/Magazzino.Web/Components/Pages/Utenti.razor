@@ -1,0 +1,130 @@
+@page "/utenti"
+@attribute [Authorize(Policy = Permessi.Amministrare)]
+@inject IDbContextFactory<MagazzinoDbContext> Dbf
+@inject Operazioni Op
+@inject UtenteCorrente Utente
+
+<PageTitle>Utenti - Magazzino</PageTitle>
+<h1>Utenti e ruoli</h1>
+<Avviso Errore="@errore" Ok="@ok" />
+
+@if (edit is not null)
+{
+    <div class="panel">
+        <h2>@(edit.Id == 0 ? "Nuovo utente" : $"Modifica {edit.Username}")</h2>
+        <div class="form">
+            <label>Nome e cognome<input @bind="edit.Nome" /></label>
+            <label>Nome utente (per entrare)<input @bind="edit.Username" disabled="@(edit.Id != 0)" autocapitalize="none" /></label>
+            <label>Ruolo
+                <select @bind="edit.Ruolo">
+                    @foreach (var r in Enum.GetValues<RuoloUtente>()) { <option value="@r">@Permessi.Descrizione(r)</option> }
+                </select>
+            </label>
+            @if (edit.Id == 0)
+            {
+                <label>@(edit.Ruolo == RuoloUtente.Tecnico ? "PIN (almeno 4 cifre)" : "Password (almeno 8 caratteri)")<input @bind="edit.Password" autocomplete="new-password" /></label>
+            }
+            else
+            {
+                <label class="check"><input type="checkbox" @bind="edit.Attivo" /> Attivo (puo' entrare)</label>
+            }
+        </div>
+        <button class="btn primary" @onclick="Salva">Salva</button>
+        <button class="btn" @onclick="() => edit = null">Annulla</button>
+    </div>
+}
+else if (reset is not null)
+{
+    <div class="panel">
+        <h2>Nuova password per @reset.NomeVisualizzato</h2>
+        <p class="muted">Comunicala all'utente: le sessioni aperte con la vecchia password vengono chiuse.</p>
+        <div class="form"><label>@(reset.Ruolo == RuoloUtente.Tecnico ? "Nuovo PIN" : "Nuova password")<input @bind="nuovaPassword" autocomplete="new-password" /></label></div>
+        <button class="btn primary" @onclick="ImpostaPassword">Imposta</button>
+        <button class="btn" @onclick="() => reset = null">Annulla</button>
+    </div>
+}
+else
+{
+    <div class="toolbar"><span class="grow muted">Ogni persona ha il suo utente: il nome compare su prelievi, movimenti e interventi.</span>
+        <button class="btn primary" @onclick="() => edit = new Modulo()">Nuovo utente</button></div>
+}
+
+<table>
+    <thead><tr><th>Nome</th><th>Nome utente</th><th>Ruolo</th><th>Stato</th><th></th></tr></thead>
+    <tbody>
+        @foreach (var u in elenco)
+        {
+            <tr class="@(u.Attivo ? "" : "muted")">
+                <td>@u.NomeVisualizzato @(u.Id == mioId ? "(tu)" : "")</td><td>@u.Username</td><td>@Permessi.Descrizione(u.Ruolo)</td>
+                <td>@(u.Attivo ? "Attivo" : "Disattivato")</td>
+                <td>
+                    <button class="btn sm" @onclick="() => { edit = new Modulo { Id = u.Id, Nome = u.NomeVisualizzato, Username = u.Username, Ruolo = u.Ruolo, Attivo = u.Attivo }; errore = ok = null; }">Modifica</button>
+                    <button class="btn sm" @onclick="() => ApriReset(u)">Nuova password</button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    private List<Utente> elenco = [];
+    private Modulo? edit;
+    private Utente? reset;
+    private string nuovaPassword = "";
+    private int mioId;
+    private string? errore, ok;
+
+    private sealed class Modulo
+    {
+        public int Id { get; set; }
+        public string Nome { get; set; } = "";
+        public string Username { get; set; } = "";
+        public RuoloUtente Ruolo { get; set; } = RuoloUtente.Tecnico;
+        public string Password { get; set; } = "";
+        public bool Attivo { get; set; } = true;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        mioId = await Utente.IdAsync();
+        await Carica();
+    }
+
+    private async Task Carica()
+    {
+        await using var db = await Dbf.CreateDbContextAsync();
+        elenco = await db.Utenti.AsNoTracking().OrderBy(u => !u.Attivo).ThenBy(u => u.Ruolo).ThenBy(u => u.NomeVisualizzato).ToListAsync();
+    }
+
+    private async Task Salva()
+    {
+        errore = ok = null;
+        var m = edit!;
+        try
+        {
+            if (m.Id == 0)
+                await Op.EseguiAsync(sp => sp.GetRequiredService<UtentiService>().CreaAsync(m.Username, m.Nome, m.Ruolo, m.Password));
+            else
+                await Op.EseguiAsync(sp => sp.GetRequiredService<UtentiService>().ModificaAsync(m.Id, m.Nome, m.Ruolo, m.Attivo));
+            ok = $"Utente {m.Nome} salvato.";
+            edit = null;
+        }
+        catch (MagazzinoException ex) { errore = ex.Message; }
+        await Carica();
+    }
+
+    private void ApriReset(Utente u) { reset = u; nuovaPassword = ""; errore = ok = null; }
+
+    private async Task ImpostaPassword()
+    {
+        errore = ok = null;
+        var u = reset!;
+        try
+        {
+            await Op.EseguiAsync(sp => sp.GetRequiredService<UtentiService>().ImpostaPasswordAsync(u.Id, nuovaPassword));
+            ok = $"Nuova password impostata per {u.NomeVisualizzato}.";
+            reset = null;
+        }
+        catch (MagazzinoException ex) { errore = ex.Message; }
+    }
+}

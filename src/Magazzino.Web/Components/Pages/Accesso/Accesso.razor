@@ -1,0 +1,94 @@
+@page "/accesso"
+@layout Magazzino.Web.Components.Layout.LayoutAccesso
+@attribute [AllowAnonymous]
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Authentication.Cookies
+@using System.ComponentModel.DataAnnotations
+@inject UtentiService Utenti
+@inject NavigationManager Nav
+
+<PageTitle>Accesso - Magazzino</PageTitle>
+
+@if (primoAvvio)
+{
+    <h1>Primo avvio</h1>
+    <p class="muted">Non c'e' ancora nessun amministratore. Crea il tuo utente: potrai poi aggiungere ufficio e tecnici da "Utenti".</p>
+    <Avviso Errore="@errore" />
+    <EditForm Model="Primo" FormName="primo" OnValidSubmit="CreaPrimo" method="post">
+        <DataAnnotationsValidator />
+        <div class="field"><label>Nome e cognome<InputText @bind-Value="Primo.Nome" autocomplete="name" /></label></div>
+        <div class="field"><label>Nome utente<InputText @bind-Value="Primo.Username" autocomplete="username" autocapitalize="none" /></label></div>
+        <div class="field"><label>Password (almeno 8 caratteri)<InputText type="password" @bind-Value="Primo.Password" autocomplete="new-password" /></label></div>
+        <ValidationSummary />
+        <button class="btn primary block" type="submit">Crea amministratore ed entra</button>
+    </EditForm>
+}
+else
+{
+    <h1>Accedi</h1>
+    <Avviso Errore="@errore" />
+    <EditForm Model="Dati" FormName="accesso" OnValidSubmit="Entra" method="post">
+        <DataAnnotationsValidator />
+        <div class="field"><label>Nome utente<InputText @bind-Value="Dati.Username" autocomplete="username" autocapitalize="none" autofocus /></label></div>
+        <div class="field"><label>Password o PIN<InputText type="password" @bind-Value="Dati.Password" autocomplete="current-password" /></label></div>
+        <ValidationSummary />
+        <button class="btn primary block" type="submit">Entra</button>
+    </EditForm>
+    <p class="muted">Password dimenticata? Chiedi all'amministratore di impostarne una nuova.</p>
+}
+
+@code {
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromQuery(Name = "ritorno")] private string? Ritorno { get; set; }
+    [SupplyParameterFromForm(FormName = "accesso")] private DatiAccesso Dati { get; set; } = new();
+    [SupplyParameterFromForm(FormName = "primo")] private DatiPrimo Primo { get; set; } = new();
+
+    private bool primoAvvio;
+    private string? errore;
+
+    protected override async Task OnInitializedAsync()
+    {
+        primoAvvio = !await Utenti.EsisteAdminAsync();
+        if (HttpMethods.IsGet(HttpContext.Request.Method) && HttpContext.User.Identity?.IsAuthenticated == true)
+            Nav.NavigateTo(HttpContext.User.IsInRole("Tecnico") ? "/t" : "/");
+    }
+
+    private async Task Entra()
+    {
+        var u = await Utenti.VerificaAsync(Dati.Username, Dati.Password);
+        if (u is null)
+        {
+            await Task.Delay(500); // rallenta chi prova password a caso
+            errore = "Nome utente o password non corretti.";
+            Dati.Password = "";
+            return;
+        }
+        await Accedi(u);
+    }
+
+    private async Task CreaPrimo()
+    {
+        try { await Accedi(await Utenti.CreaPrimoAdminAsync(Primo.Username, Primo.Nome, Primo.Password)); }
+        catch (MagazzinoException ex) { errore = ex.Message; }
+    }
+
+    private async Task Accedi(Utente u)
+    {
+        await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, Permessi.Principal(u),
+            new AuthenticationProperties { IsPersistent = true });
+        Nav.NavigateTo(Permessi.RitornoSicuro(Ritorno, u.Ruolo), forceLoad: true);
+    }
+
+    private sealed class DatiAccesso
+    {
+        [Required(ErrorMessage = "Scrivi il nome utente.")] public string Username { get; set; } = "";
+        [Required(ErrorMessage = "Scrivi la password.")] public string Password { get; set; } = "";
+    }
+
+    private sealed class DatiPrimo
+    {
+        [Required(ErrorMessage = "Scrivi nome e cognome.")] public string Nome { get; set; } = "";
+        [Required(ErrorMessage = "Scrivi il nome utente.")] public string Username { get; set; } = "";
+        [Required(ErrorMessage = "Scrivi la password.")] public string Password { get; set; } = "";
+    }
+}

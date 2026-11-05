@@ -1,9 +1,8 @@
 @page "/t/interventi"
 @inject IDbContextFactory<MagazzinoDbContext> Dbf
-@inject TecnicoCorrente Tecnico
+@inject UtenteCorrente Utente
 
 <PageTitle>Interventi in corso</PageTitle>
-<ChiediNome Impostato="Carica" />
 <h1>Interventi in corso</h1>
 <label class="muted"><input type="checkbox" @bind="tutti" @bind:after="Carica" /> mostra anche quelli dei colleghi</label>
 
@@ -25,9 +24,12 @@ else
     private List<Intervento>? elenco;
     private bool tutti;
 
-    protected override async Task OnAfterRenderAsync(bool first)
+    private string nome = "";
+
+    protected override async Task OnInitializedAsync()
     {
-        if (first) { await Tecnico.CaricaAsync(); await Carica(); StateHasChanged(); }
+        nome = await Utente.NomeAsync();
+        await Carica();
     }
 
     private async Task Carica()
@@ -35,7 +37,7 @@ else
         await using var db = await Dbf.CreateDbContextAsync();
         var q = db.Interventi.Include(i => i.Linea).Include(i => i.Macchina).Include(i => i.RicambiUsati).ThenInclude(r => r.Ricambio)
             .Where(i => i.Stato == StatoIntervento.InCorso);
-        if (!tutti && !string.IsNullOrEmpty(Tecnico.Nome)) q = q.Where(i => i.Tecnico == Tecnico.Nome);
+        if (!tutti) q = q.Where(i => i.Tecnico == nome);
         elenco = await q.OrderByDescending(i => i.Id).ToListAsync();
     }
 }

@@ -1,0 +1,7 @@
+<form method="post" action="esci" class="esci">
+    <AntiforgeryToken />
+    <button type="submit" class="@Classe">Esci</button>
+</form>
+@code {
+    [Parameter] public string Classe { get; set; } = "btn sm";
+}

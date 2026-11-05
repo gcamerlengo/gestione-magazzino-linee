@@ -1,4 +1,6 @@
 @page "/ordini/{Id:int}"
+@attribute [Authorize(Policy = Permessi.Ufficio)]
+@inject UtenteCorrente Utente
 @inject IDbContextFactory<MagazzinoDbContext> Dbf
 @inject Operazioni Op
 
@@ -66,7 +68,8 @@
     @if (InBozza) { <button class="btn primary" @onclick="Conferma">Conferma e invia</button> }
     @if (o.Stato == StatoOrdineFornitore.DaApprovare)
     {
-        <button class="btn primary" @onclick="() => Passa(StatoOrdineFornitore.Inviato)">Approva e invia</button>
+        @if (puoApprovare) { <button class="btn primary" @onclick="() => Passa(StatoOrdineFornitore.Inviato)">Approva e invia</button> }
+        else { <span class="muted">In attesa dell'approvazione di un responsabile.</span> }
         <button class="btn" @onclick="() => Passa(StatoOrdineFornitore.Bozza)">Rimanda in bozza</button>
     }
     @if (o.Stato == StatoOrdineFornitore.Inviato) { <button class="btn" @onclick="() => Passa(StatoOrdineFornitore.Confermato)">Il fornitore ha confermato</button> }
@@ -101,7 +104,13 @@
     private bool InBozza => o?.Stato == StatoOrdineFornitore.Bozza;
     private bool Chiuso => o?.Stato is StatoOrdineFornitore.Ricevuto or StatoOrdineFornitore.Chiuso or StatoOrdineFornitore.Annullato;
 
-    protected override Task OnParametersSetAsync() => Carica();
+    private bool puoApprovare;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        puoApprovare = await Utente.PuoAsync(Permessi.Approvare);
+        await Carica();
+    }
 
     private async Task Carica()
     {
@@ -129,7 +138,14 @@
     private Task Aggiungi() => Esegui((s, _) => s.AggiungiRigaAsync(Id, new RigaNuovoOrdine(nuovaRicambioId, nuovaQta)));
     private Task Elimina(int rigaId) => Esegui((s, _) => s.EliminaRigaAsync(rigaId));
     private Task SalvaConsegna() => Esegui((s, _) => s.ImpostaConsegnaPrevistaAsync(Id, consegna), "Data di consegna salvata.");
-    private Task Passa(StatoOrdineFornitore stato) => Esegui((_, c) => c.CambiaStatoOrdineAsync(Id, stato, UtenteCorrente.Nome), $"Ordine passato a {stato}.");
+    private async Task Passa(StatoOrdineFornitore stato)
+    {
+        // Approvare un ordine sopra soglia spetta a responsabile o amministratore.
+        if (o!.Stato == StatoOrdineFornitore.DaApprovare && stato == StatoOrdineFornitore.Inviato && !puoApprovare)
+        { errore = "Solo un responsabile puo' approvare questo ordine."; return; }
+        var chi = await Utente.NomeAsync();
+        await Esegui((_, c) => c.CambiaStatoOrdineAsync(Id, stato, chi), $"Ordine passato a {stato}.");
+    }
 
     private Task Modifica(RigaOrdineFornitore r, object? qta, object? prezzo)
     {

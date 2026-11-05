@@ -1,0 +1,12 @@
+@page "/accesso/negato"
+@layout Magazzino.Web.Components.Layout.LayoutAccesso
+@attribute [AllowAnonymous]
+
+<PageTitle>Accesso non consentito - Magazzino</PageTitle>
+<h1>Accesso non consentito</h1>
+<p>Il tuo ruolo non permette di aprire quella pagina.</p>
+<a class="btn primary block" href="@(HttpContext.User.IsInRole("Tecnico") ? "t" : "")">Torna all'inizio</a>
+
+@code {
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+}

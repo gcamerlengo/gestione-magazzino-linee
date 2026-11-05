@@ -14,6 +14,17 @@
         <NavLink href="scatole">Scatole e QR</NavLink>
         <div class="nav-group">Tecnici</div>
         <NavLink href="t">App tecnici</NavLink>
+        <AuthorizeView Policy="@Permessi.Amministrare">
+            <div class="nav-group">Amministrazione</div>
+            <NavLink href="utenti">Utenti e ruoli</NavLink>
+        </AuthorizeView>
+        <AuthorizeView>
+            <div class="nav-user">
+                <div><strong>@context.User.Identity?.Name</strong></div>
+                <NavLink href="password">Cambia password</NavLink>
+                <Esci Classe="btn sm" />
+            </div>
+        </AuthorizeView>
     </nav>
     <main class="content">
         @Body

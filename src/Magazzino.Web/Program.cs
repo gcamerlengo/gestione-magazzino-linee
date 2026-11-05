@@ -1,4 +1,5 @@
 using Magazzino.Infrastructure;
+using Magazzino.Web;
 using Magazzino.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -6,7 +7,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddMagazzino(builder.Configuration.GetConnectionString("Magazzino")
     ?? throw new InvalidOperationException("Manca la stringa di connessione 'Magazzino'."));
 builder.Services.AddSingleton<Magazzino.Web.IndirizziQr>();
-builder.Services.AddScoped<Magazzino.Web.TecnicoCorrente>();
+builder.Services.AddAccessi();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
@@ -22,7 +23,11 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.UseStaticFiles();
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseAntiforgery();
+
+app.MapAccessi();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

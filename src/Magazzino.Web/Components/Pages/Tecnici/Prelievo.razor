@@ -1,11 +1,10 @@
 @page "/t/s/{Codice}"
 @inject IDbContextFactory<MagazzinoDbContext> Dbf
 @inject Operazioni Op
-@inject TecnicoCorrente Tecnico
+@inject UtenteCorrente Utente
 
 <PageTitle>Prelievo @Codice</PageTitle>
 <Avviso Errore="@errore" />
-<ChiediNome Impostato="StateHasChanged" />
 
 @if (fatto is not null)
 {
@@ -17,7 +16,7 @@
     <a class="btn primary block" href="t/interventi/@fatto.Value.InterventoId">Vai all'intervento</a>
     <a class="btn block" href="t">Preleva un altro pezzo</a>
 }
-else if (info is not null && !string.IsNullOrEmpty(Tecnico.Nome))
+else if (info is not null)
 {
     <div class="card">
         <div class="big">@info.Ricambio.Codice</div>
@@ -89,12 +88,14 @@ else if (info is not null && !string.IsNullOrEmpty(Tecnico.Nome))
     private MotivoIntervento motivo = MotivoIntervento.Guasto;
     private decimal quantita = 1;
     private string? errore;
+    private string nome = "";
     private bool occupato;
     private (decimal Quantita, string Linea, int InterventoId, string CodiceIntervento, decimal Rimasti)? fatto;
 
     protected override async Task OnParametersSetAsync()
     {
         errore = null; fatto = null;
+        nome = await Utente.NomeAsync();
         try
         {
             info = await Op.EseguiAsync(sp => sp.GetRequiredService<ScatoleService>().TrovaAsync(Codice));
@@ -103,11 +104,6 @@ else if (info is not null && !string.IsNullOrEmpty(Tecnico.Nome))
         await using var db = await Dbf.CreateDbContextAsync();
         linee = await db.Linee.Where(l => l.Attiva).ToListAsync();
         linee = linee.OrderBy(l => OrdineLinea(l.Nome)).ThenBy(l => l.Nome).ToList();
-    }
-
-    protected override async Task OnAfterRenderAsync(bool first)
-    {
-        if (first) { await Tecnico.CaricaAsync(); StateHasChanged(); }
     }
 
     // "LINEA 2" prima di "LINEA 10", "LINEA 4A" accanto a "LINEA 4".
@@ -122,7 +118,7 @@ else if (info is not null && !string.IsNullOrEmpty(Tecnico.Nome))
         macchine = await db.Macchine.Where(m => m.LineaId == lineaId && m.Attiva).OrderBy(m => m.Nome).ToListAsync();
         inCorso = await db.Interventi.Include(i => i.Macchina).Where(i => i.LineaId == lineaId && i.Stato == StatoIntervento.InCorso).OrderByDescending(i => i.Id).ToListAsync();
         // Se il tecnico ha gia' un intervento aperto su questa linea, si propone quello.
-        interventoId = inCorso.FirstOrDefault(i => i.Tecnico == Tecnico.Nome)?.Id ?? 0;
+        interventoId = inCorso.FirstOrDefault(i => i.Tecnico == nome)?.Id ?? 0;
     }
 
     private async Task Preleva()
@@ -134,7 +130,7 @@ else if (info is not null && !string.IsNullOrEmpty(Tecnico.Nome))
         {
             var buono = await Op.EseguiAsync(sp => sp.GetRequiredService<ScaricoService>().PrelevaPerLineaAsync(
                 lineaId, macchinaId == 0 ? null : macchinaId, motivo,
-                [new RigaDaPrelevare(info.Ricambio.Id, info.Ubicazione.Id, quantita)], Tecnico.Nome!, interventoId == 0 ? null : interventoId));
+                [new RigaDaPrelevare(info.Ricambio.Id, info.Ubicazione.Id, quantita)], nome, interventoId == 0 ? null : interventoId));
             var dopo = await Op.EseguiAsync(sp => sp.GetRequiredService<ScatoleService>().TrovaAsync(Codice));
             await using var db = await Dbf.CreateDbContextAsync();
             var interv = await db.Interventi.FindAsync(buono.InterventoId);
