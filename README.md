@@ -71,7 +71,26 @@ Non ancora: piani preventivi e scadenze aperte (modulo scadenzario), ticket, ute
 | Movimenti | Ultimi movimenti con filtro per tipo, storno dei trasferimenti e delle rettifiche |
 | Ricambi, Fornitori, Ubicazioni | Anagrafiche |
 
-Gli accessi con utente e ruolo arrivano nel passo 4: per ora le operazioni sono registrate con l'utente `ufficio`.
+## Scatole con QR e app per i tecnici
+
+Ogni **scatola** in magazzino contiene un solo ricambio, sta in un'ubicazione e porta un'etichetta
+con un QR (codice `SC-000001`, numerazione unica che non cambia). Dalla pagina **Scatole e QR**
+si creano le scatole (anche tutte insieme per le giacenze esistenti) e si stampano le etichette
+62 x 40 mm.
+
+Il QR contiene l'indirizzo `<IndirizzoPubblico>/t/s/SC-000001`: il tecnico lo inquadra con la
+fotocamera del telefono, tocca il link e si apre il prelievo di quel ricambio da quella ubicazione.
+Sceglie linea (obbligatoria), macchina (facoltativa), motivo e quantita': il prelievo scala la
+giacenza e crea l'intervento sulla linea, oppure aggiunge il pezzo a un intervento gia' in corso
+sulla stessa linea. Da **I miei interventi** si rimettono in magazzino i pezzi non usati e si chiude
+l'intervento con descrizione, ore e destino del pezzo smontato.
+
+Configurazione in `appsettings.json`, sezione `Magazzino`:
+- `IndirizzoPubblico`: indirizzo del server raggiungibile dai telefoni (es. `http://192.168.93.14:5080`).
+  Va impostato prima di stampare le etichette, perche' finisce dentro il QR.
+- `CostoOrario`: costo orario della manodopera per gli interventi.
+
+Gli accessi con utente e ruolo arrivano nel prossimo passo: per ora le operazioni sono registrate con l'utente `ufficio`.
 
 ## Piano
 

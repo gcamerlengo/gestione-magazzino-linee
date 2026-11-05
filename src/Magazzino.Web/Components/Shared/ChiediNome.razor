@@ -1,0 +1,22 @@
+@inject TecnicoCorrente Tecnico
+
+@if (Tecnico.Caricato && string.IsNullOrEmpty(Tecnico.Nome))
+{
+    <div class="card">
+        <div class="big">Chi sei?</div>
+        <p class="muted">Il nome viene ricordato su questo telefono e registrato su prelievi e interventi.</p>
+        <div class="field"><input placeholder="Nome e cognome" @bind="nome" @bind:event="oninput" /></div>
+        <button class="btn primary block" disabled="@(string.IsNullOrWhiteSpace(nome))" @onclick="Salva">Continua</button>
+    </div>
+}
+
+@code {
+    [Parameter] public EventCallback Impostato { get; set; }
+    private string nome = "";
+
+    private async Task Salva()
+    {
+        await Tecnico.ImpostaAsync(nome);
+        await Impostato.InvokeAsync();
+    }
+}

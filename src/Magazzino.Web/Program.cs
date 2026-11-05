@@ -5,6 +5,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddMagazzino(builder.Configuration.GetConnectionString("Magazzino")
     ?? throw new InvalidOperationException("Manca la stringa di connessione 'Magazzino'."));
+builder.Services.AddSingleton<Magazzino.Web.IndirizziQr>();
+builder.Services.AddScoped<Magazzino.Web.TecnicoCorrente>();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 

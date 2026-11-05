@@ -1,0 +1,42 @@
+@page "/scatole/etichette"
+@inject IDbContextFactory<MagazzinoDbContext> Dbf
+@inject IndirizziQr Indirizzi
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Etichette - Magazzino</PageTitle>
+<h1>Etichette scatole</h1>
+<div class="toolbar">
+    <span class="grow muted">Formato 62 x 40 mm. Stampa su foglio adesivo o etichettatrice; il QR apre il prelievo sul telefono.</span>
+    <a class="btn" href="scatole">Indietro</a>
+    <button class="btn primary" @onclick="Stampa">Stampa</button>
+</div>
+
+<div class="labels">
+    @foreach (var s in scatole)
+    {
+        <div class="label">
+            <div class="qr">@((MarkupString)Qr.Svg(Indirizzi.PerScatola(s.Codice, Nav.BaseUri)))</div>
+            <div class="t">
+                <div class="c">@s.Ricambio?.Codice</div>
+                <div>@s.Ricambio?.Descrizione</div>
+                <div style="margin-top:1mm">Ubic. <strong>@s.Ubicazione?.Codice</strong></div>
+                <div class="s">@s.Codice</div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? Ids { get; set; }
+    private List<Scatola> scatole = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var ids = (Ids ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Select(x => int.TryParse(x, out var i) ? i : 0).Where(i => i > 0).ToList();
+        await using var db = await Dbf.CreateDbContextAsync();
+        scatole = await db.Scatole.Include(s => s.Ricambio).Include(s => s.Ubicazione).Where(s => ids.Contains(s.Id)).OrderBy(s => s.Codice).ToListAsync();
+    }
+
+    private async Task Stampa() => await JS.InvokeVoidAsync("print");
+}

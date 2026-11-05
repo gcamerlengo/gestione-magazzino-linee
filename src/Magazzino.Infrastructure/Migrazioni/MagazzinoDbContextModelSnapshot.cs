@@ -331,6 +331,49 @@ namespace Magazzino.Infrastructure.Migrazioni
                     b.ToTable("RicambiMacchine");
                 });
 
+            modelBuilder.Entity("Magazzino.Domain.Anagrafiche.Scatola", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Attiva")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Codice")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("RicambioId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("UbicazioneId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Codice")
+                        .IsUnique();
+
+                    b.HasIndex("RicambioId");
+
+                    b.HasIndex("UbicazioneId");
+
+                    b.ToTable("Scatole");
+                });
+
             modelBuilder.Entity("Magazzino.Domain.Anagrafiche.Ubicazione", b =>
                 {
                     b.Property<int>("Id")
@@ -1082,6 +1125,25 @@ namespace Magazzino.Infrastructure.Migrazioni
                     b.Navigation("Macchina");
 
                     b.Navigation("Ricambio");
+                });
+
+            modelBuilder.Entity("Magazzino.Domain.Anagrafiche.Scatola", b =>
+                {
+                    b.HasOne("Magazzino.Domain.Anagrafiche.Ricambio", "Ricambio")
+                        .WithMany()
+                        .HasForeignKey("RicambioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Magazzino.Domain.Anagrafiche.Ubicazione", "Ubicazione")
+                        .WithMany()
+                        .HasForeignKey("UbicazioneId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Ricambio");
+
+                    b.Navigation("Ubicazione");
                 });
 
             modelBuilder.Entity("Magazzino.Domain.Carico.OrdineFornitore", b =>

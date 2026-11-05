@@ -1,0 +1,5 @@
+<span class="pill @(Stato switch { Magazzino.Domain.Scarico.StatoIntervento.InCorso => "pill-blue", Magazzino.Domain.Scarico.StatoIntervento.Completato => "pill-ok", _ => "pill-grey" })">@(Stato == Magazzino.Domain.Scarico.StatoIntervento.InCorso ? "In corso" : Stato.ToString())</span>
+
+@code {
+    [Parameter, EditorRequired] public Magazzino.Domain.Scarico.StatoIntervento Stato { get; set; }
+}

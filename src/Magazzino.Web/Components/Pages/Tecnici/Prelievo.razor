@@ -1,0 +1,147 @@
+@page "/t/s/{Codice}"
+@inject IDbContextFactory<MagazzinoDbContext> Dbf
+@inject Operazioni Op
+@inject TecnicoCorrente Tecnico
+
+<PageTitle>Prelievo @Codice</PageTitle>
+<Avviso Errore="@errore" />
+<ChiediNome Impostato="StateHasChanged" />
+
+@if (fatto is not null)
+{
+    <div class="card">
+        <div class="big">Prelievo registrato</div>
+        <p>@Formato.Q(fatto.Value.Quantita) @info?.Ricambio.UnitaMisura di <strong>@info?.Ricambio.Codice</strong> per <strong>@fatto.Value.Linea</strong>.</p>
+        <p class="muted">Intervento @fatto.Value.CodiceIntervento. Nuova giacenza nella scatola: @Formato.Q(fatto.Value.Rimasti).</p>
+    </div>
+    <a class="btn primary block" href="t/interventi/@fatto.Value.InterventoId">Vai all'intervento</a>
+    <a class="btn block" href="t">Preleva un altro pezzo</a>
+}
+else if (info is not null && !string.IsNullOrEmpty(Tecnico.Nome))
+{
+    <div class="card">
+        <div class="big">@info.Ricambio.Codice</div>
+        <div>@info.Ricambio.Descrizione</div>
+        <div class="muted" style="margin-top:.4rem">Scatola @info.Scatola.Codice, ubicazione @info.Ubicazione.Codice</div>
+        <div class="stock" style="margin-top:.6rem"><span class="muted">In scatola</span><span class="n">@Formato.Q(info.Giacenza) @info.Ricambio.UnitaMisura</span></div>
+    </div>
+
+    @if (info.Giacenza <= 0)
+    {
+        <div class="alert alert-err">La scatola risulta vuota: avvisa l'ufficio. Non si puo' prelevare.</div>
+    }
+    else
+    {
+        <div class="field">Quanti ne prendi
+            <div class="qty">
+                <button @onclick="() => Cambia(-1)" disabled="@(quantita <= 1)">-</button>
+                <input type="number" step="any" min="0" @bind="quantita" />
+                <button @onclick="() => Cambia(1)" disabled="@(quantita + 1 > info.Giacenza)">+</button>
+            </div>
+        </div>
+        <label class="field">Per quale linea
+            <select @bind="lineaId" @bind:after="LineaCambiata">
+                <option value="0">Scegli la linea...</option>
+                @foreach (var l in linee) {<option value="@l.Id">@l.Nome</option>}
+            </select>
+        </label>
+        @if (lineaId != 0)
+        {
+            @if (inCorso.Count > 0)
+            {
+                <label class="field">Intervento
+                    <select @bind="interventoId">
+                        <option value="0">Nuovo intervento</option>
+                        @foreach (var i in inCorso) {<option value="@i.Id">@i.Codice @(i.Macchina?.Nome) (@i.Tecnico)</option>}
+                    </select>
+                </label>
+            }
+            @if (interventoId == 0)
+            {
+                <label class="field">Macchina (se la sai)
+                    <select @bind="macchinaId">
+                        <option value="0">Non specificata</option>
+                        @foreach (var m in macchine) {<option value="@m.Id">@m.Nome</option>}
+                    </select>
+                </label>
+                <label class="field">Motivo
+                    <select @bind="motivo">
+                        <option value="@MotivoIntervento.Guasto">Guasto</option>
+                        <option value="@MotivoIntervento.Preventiva">Manutenzione preventiva</option>
+                        <option value="@MotivoIntervento.Miglioria">Miglioria</option>
+                        <option value="@MotivoIntervento.Altro">Altro</option>
+                    </select>
+                </label>
+            }
+        }
+        <button class="btn primary block" disabled="@(lineaId == 0 || quantita <= 0 || occupato)" @onclick="Preleva">Preleva @Formato.Q(quantita) @info.Ricambio.UnitaMisura</button>
+        <a class="btn block" href="t">Annulla</a>
+    }
+}
+
+@code {
+    [Parameter] public string Codice { get; set; } = "";
+    private InfoScatola? info;
+    private List<Linea> linee = [];
+    private List<Macchina> macchine = [];
+    private List<Intervento> inCorso = [];
+    private int lineaId, macchinaId, interventoId;
+    private MotivoIntervento motivo = MotivoIntervento.Guasto;
+    private decimal quantita = 1;
+    private string? errore;
+    private bool occupato;
+    private (decimal Quantita, string Linea, int InterventoId, string CodiceIntervento, decimal Rimasti)? fatto;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        errore = null; fatto = null;
+        try
+        {
+            info = await Op.EseguiAsync(sp => sp.GetRequiredService<ScatoleService>().TrovaAsync(Codice));
+        }
+        catch (MagazzinoException ex) { errore = ex.Message; info = null; return; }
+        await using var db = await Dbf.CreateDbContextAsync();
+        linee = await db.Linee.Where(l => l.Attiva).ToListAsync();
+        linee = linee.OrderBy(l => OrdineLinea(l.Nome)).ThenBy(l => l.Nome).ToList();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        if (first) { await Tecnico.CaricaAsync(); StateHasChanged(); }
+    }
+
+    // "LINEA 2" prima di "LINEA 10", "LINEA 4A" accanto a "LINEA 4".
+    private static int OrdineLinea(string nome) => int.TryParse(new string(nome.Where(char.IsDigit).ToArray()), out var n) ? n : int.MaxValue;
+
+    private void Cambia(int d) => quantita = Math.Max(1, quantita + d);
+
+    private async Task LineaCambiata()
+    {
+        macchinaId = interventoId = 0;
+        await using var db = await Dbf.CreateDbContextAsync();
+        macchine = await db.Macchine.Where(m => m.LineaId == lineaId && m.Attiva).OrderBy(m => m.Nome).ToListAsync();
+        inCorso = await db.Interventi.Include(i => i.Macchina).Where(i => i.LineaId == lineaId && i.Stato == StatoIntervento.InCorso).OrderByDescending(i => i.Id).ToListAsync();
+        // Se il tecnico ha gia' un intervento aperto su questa linea, si propone quello.
+        interventoId = inCorso.FirstOrDefault(i => i.Tecnico == Tecnico.Nome)?.Id ?? 0;
+    }
+
+    private async Task Preleva()
+    {
+        errore = null;
+        if (quantita > info!.Giacenza) { errore = $"Nella scatola ci sono solo {Formato.Q(info.Giacenza)} {info.Ricambio.UnitaMisura}."; return; }
+        occupato = true;
+        try
+        {
+            var buono = await Op.EseguiAsync(sp => sp.GetRequiredService<ScaricoService>().PrelevaPerLineaAsync(
+                lineaId, macchinaId == 0 ? null : macchinaId, motivo,
+                [new RigaDaPrelevare(info.Ricambio.Id, info.Ubicazione.Id, quantita)], Tecnico.Nome!, interventoId == 0 ? null : interventoId));
+            var dopo = await Op.EseguiAsync(sp => sp.GetRequiredService<ScatoleService>().TrovaAsync(Codice));
+            await using var db = await Dbf.CreateDbContextAsync();
+            var interv = await db.Interventi.FindAsync(buono.InterventoId);
+            fatto = (quantita, linee.First(l => l.Id == lineaId).Nome, interv!.Id, interv.Codice, dopo.Giacenza);
+        }
+        catch (MagazzinoException ex) { errore = ex.Message; }
+        catch (DbUpdateConcurrencyException) { errore = "Qualcun altro ha appena prelevato dalla stessa scatola: riprova."; }
+        finally { occupato = false; }
+    }
+}

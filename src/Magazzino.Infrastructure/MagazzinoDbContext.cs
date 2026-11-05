@@ -17,6 +17,7 @@ public class MagazzinoDbContext(DbContextOptions<MagazzinoDbContext> options) : 
     public DbSet<RicambioFornitore> RicambiFornitori => Set<RicambioFornitore>();
     public DbSet<Ubicazione> Ubicazioni => Set<Ubicazione>();
     public DbSet<Utente> Utenti => Set<Utente>();
+    public DbSet<Scatola> Scatole => Set<Scatola>();
 
     public DbSet<RichiestaAcquisto> RichiesteAcquisto => Set<RichiestaAcquisto>();
     public DbSet<OrdineFornitore> OrdiniFornitore => Set<OrdineFornitore>();
@@ -38,6 +39,7 @@ public class MagazzinoDbContext(DbContextOptions<MagazzinoDbContext> options) : 
         b.Entity<Ubicazione>().HasIndex(x => x.Codice).IsUnique();
         b.Entity<Fornitore>().HasIndex(x => x.RagioneSociale).IsUnique();
         b.Entity<Utente>().HasIndex(x => x.Username).IsUnique();
+        b.Entity<Scatola>().HasIndex(x => x.Codice).IsUnique();
 
         b.Entity<RicambioMacchina>().HasKey(x => new { x.MacchinaId, x.RicambioId });
         b.Entity<RicambioFornitore>().HasKey(x => new { x.RicambioId, x.FornitoreId });
