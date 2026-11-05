@@ -1,0 +1,147 @@
+@page "/ordini/{Id:int}"
+@inject IDbContextFactory<MagazzinoDbContext> Dbf
+@inject Operazioni Op
+
+<PageTitle>@o?.Numero - Magazzino</PageTitle>
+@if (o is null) { <p class="muted">Caricamento...</p> return; }
+
+<h1>Ordine @o.Numero <StatoOrdine Stato="o.Stato" /></h1>
+<Avviso Errore="@errore" Ok="@ok" />
+
+<div class="panel">
+    <div class="form">
+        <label>Fornitore<input value="@o.Fornitore?.RagioneSociale" disabled /></label>
+        <label>Data ordine<input value="@Formato.Data(o.DataOrdine)" disabled /></label>
+        <label>Consegna prevista<input type="date" @bind="consegna" @bind:after="SalvaConsegna" disabled="@(Chiuso)" /></label>
+        <label>Email ordini<input value="@o.Fornitore?.EmailOrdini" disabled /></label>
+    </div>
+    @if (!string.IsNullOrEmpty(o.ApprovatoDa)) { <p class="muted">Approvato da @o.ApprovatoDa il @Formato.Data(o.ApprovatoIl)</p> }
+    @if (!string.IsNullOrEmpty(o.Note)) { <p class="muted">@o.Note</p> }
+</div>
+
+<h2>Righe</h2>
+<table>
+    <thead><tr><th>#</th><th>Codice</th><th>Descrizione</th><th class="n">Ordinata</th><th class="n">Ricevuta</th><th class="n">Prezzo</th><th class="n">Importo</th><th></th></tr></thead>
+    <tbody>
+        @foreach (var r in o.Righe.OrderBy(r => r.NumeroRiga))
+        {
+            <tr>
+                <td>@r.NumeroRiga</td>
+                <td>@(r.Ricambio?.Codice ?? r.CodiceFornitore)</td>
+                <td>@r.Descrizione</td>
+                @if (InBozza)
+                {
+                    <td class="n"><input type="number" step="any" value="@r.Quantita" @onchange="e => Modifica(r, e.Value, null)" /></td>
+                    <td class="n">-</td>
+                    <td class="n"><input type="number" step="any" value="@r.PrezzoUnitario" @onchange="e => Modifica(r, null, e.Value)" /></td>
+                }
+                else
+                {
+                    <td class="n">@Formato.Q(r.Quantita) @r.UnitaMisura</td>
+                    <td class="n">@Formato.Q(r.QuantitaRicevuta)</td>
+                    <td class="n">@Formato.Euro(r.PrezzoUnitario)</td>
+                }
+                <td class="n">@Formato.Euro(r.Quantita * r.PrezzoUnitario)</td>
+                <td>@if (InBozza) {<button class="btn sm danger" @onclick="() => Elimina(r.Id)">Togli</button>}</td>
+            </tr>
+        }
+        <tr><td colspan="6" class="n"><strong>Totale</strong></td><td class="n"><strong>@Formato.Euro(o.Totale)</strong></td><td></td></tr>
+    </tbody>
+</table>
+
+@if (InBozza)
+{
+    <div class="toolbar" style="margin-top:.75rem">
+        <select @bind="nuovaRicambioId">
+            <option value="0">Aggiungi ricambio...</option>
+            @foreach (var rc in ricambi) {<option value="@rc.Id">@rc.Codice - @rc.Descrizione</option>}
+        </select>
+        <input type="number" step="any" @bind="nuovaQta" />
+        <button class="btn" disabled="@(nuovaRicambioId == 0)" @onclick="Aggiungi">Aggiungi riga</button>
+    </div>
+}
+
+<h2>Azioni</h2>
+<div class="toolbar">
+    @if (InBozza) { <button class="btn primary" @onclick="Conferma">Conferma e invia</button> }
+    @if (o.Stato == StatoOrdineFornitore.DaApprovare)
+    {
+        <button class="btn primary" @onclick="() => Passa(StatoOrdineFornitore.Inviato)">Approva e invia</button>
+        <button class="btn" @onclick="() => Passa(StatoOrdineFornitore.Bozza)">Rimanda in bozza</button>
+    }
+    @if (o.Stato == StatoOrdineFornitore.Inviato) { <button class="btn" @onclick="() => Passa(StatoOrdineFornitore.Confermato)">Il fornitore ha confermato</button> }
+    @if (o.Stato is StatoOrdineFornitore.Inviato or StatoOrdineFornitore.Confermato or StatoOrdineFornitore.RicevutoInParte)
+    {
+        <a class="btn primary" href="ricevimenti/nuovo/@o.Id">Registra arrivo merce (DDT)</a>
+    }
+    @if (o.Stato is StatoOrdineFornitore.RicevutoInParte or StatoOrdineFornitore.Ricevuto) { <button class="btn" @onclick="() => Passa(StatoOrdineFornitore.Chiuso)">Chiudi ordine</button> }
+    @if (CaricoService.TransizioneAmmessa(o.Stato, StatoOrdineFornitore.Annullato)) { <button class="btn danger" @onclick="() => Passa(StatoOrdineFornitore.Annullato)">Annulla ordine</button> }
+</div>
+@if (o.Stato == StatoOrdineFornitore.RicevutoInParte) { <p class="muted">Chiudendo un ordine ricevuto in parte, il residuo non arrivera' piu' e smette di contare come merce in arrivo.</p> }
+
+@if (ricevimenti.Count > 0)
+{
+    <h2>Arrivi registrati</h2>
+    <table>
+        <thead><tr><th>Ricevimento</th><th>DDT</th><th>Data DDT</th><th>Registrato da</th><th class="n">Righe</th></tr></thead>
+        <tbody>@foreach (var r in ricevimenti) {<tr><td>@r.Numero</td><td>@r.NumeroDdt</td><td>@Formato.Data(r.DataDdt)</td><td>@r.RicevutoDa</td><td class="n">@r.Righe.Count</td></tr>}</tbody>
+    </table>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private OrdineFornitore? o;
+    private List<Ricambio> ricambi = [];
+    private List<Ricevimento> ricevimenti = [];
+    private DateTime? consegna;
+    private int nuovaRicambioId;
+    private decimal nuovaQta = 1;
+    private string? errore, ok;
+
+    private bool InBozza => o?.Stato == StatoOrdineFornitore.Bozza;
+    private bool Chiuso => o?.Stato is StatoOrdineFornitore.Ricevuto or StatoOrdineFornitore.Chiuso or StatoOrdineFornitore.Annullato;
+
+    protected override Task OnParametersSetAsync() => Carica();
+
+    private async Task Carica()
+    {
+        await using var db = await Dbf.CreateDbContextAsync();
+        o = await db.OrdiniFornitore.Include(x => x.Fornitore).Include(x => x.Righe).ThenInclude(r => r.Ricambio).AsNoTracking().FirstOrDefaultAsync(x => x.Id == Id);
+        if (o is null) { errore = "Ordine non trovato."; return; }
+        consegna = o.DataConsegnaPrevista is DateTime d ? Formato.Locale(d).Date : null;
+        ricambi = await db.Ricambi.Where(r => r.Attivo).OrderBy(r => r.Codice).ToListAsync();
+        var idRighe = o.Righe.Select(r => (int?)r.Id).ToList();
+        ricevimenti = await db.Ricevimenti.Include(r => r.Righe).Where(r => r.Righe.Any(x => idRighe.Contains(x.RigaOrdineFornitoreId))).OrderBy(r => r.Id).ToListAsync();
+    }
+
+    private async Task Esegui(Func<OrdiniService, CaricoService, Task> azione, string? messaggio = null)
+    {
+        errore = ok = null;
+        try
+        {
+            await Op.EseguiAsync(sp => azione(sp.GetRequiredService<OrdiniService>(), sp.GetRequiredService<CaricoService>()));
+            ok = messaggio;
+        }
+        catch (MagazzinoException ex) { errore = ex.Message; }
+        await Carica();
+    }
+
+    private Task Aggiungi() => Esegui((s, _) => s.AggiungiRigaAsync(Id, new RigaNuovoOrdine(nuovaRicambioId, nuovaQta)));
+    private Task Elimina(int rigaId) => Esegui((s, _) => s.EliminaRigaAsync(rigaId));
+    private Task SalvaConsegna() => Esegui((s, _) => s.ImpostaConsegnaPrevistaAsync(Id, consegna), "Data di consegna salvata.");
+    private Task Passa(StatoOrdineFornitore stato) => Esegui((_, c) => c.CambiaStatoOrdineAsync(Id, stato, UtenteCorrente.Nome), $"Ordine passato a {stato}.");
+
+    private Task Modifica(RigaOrdineFornitore r, object? qta, object? prezzo)
+    {
+        var q = qta is string sq && decimal.TryParse(sq, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var vq) ? vq : r.Quantita;
+        var p = prezzo is string sp && decimal.TryParse(sp, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var vp) ? vp : r.PrezzoUnitario;
+        return Esegui((s, _) => s.ModificaRigaAsync(r.Id, q, p));
+    }
+
+    private async Task Conferma()
+    {
+        StatoOrdineFornitore stato = default;
+        await Esegui(async (s, _) => stato = await s.ConfermaBozzaAsync(Id));
+        if (errore is null) ok = stato == StatoOrdineFornitore.DaApprovare ? "L'ordine supera la soglia: va approvato." : "Ordine confermato e segnato come inviato.";
+    }
+}

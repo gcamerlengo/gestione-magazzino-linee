@@ -1,0 +1,18 @@
+@page "/movimenti"
+
+<PageTitle>Movimenti - Magazzino</PageTitle>
+<h1>Movimenti</h1>
+<div class="toolbar">
+    <label class="muted">Tipo
+        <select @bind="tipo">
+            <option value="">(tutti)</option>
+            @foreach (var t in Enum.GetValues<TipoMovimento>()) {<option value="@t">@Formato.Tipo(t)</option>}
+        </select>
+    </label>
+    <span class="muted">Ultimi 200. I movimenti non si cancellano: si stornano.</span>
+</div>
+<MovimentiTabella Tipo="tipo" />
+
+@code {
+    private TipoMovimento? tipo;
+}

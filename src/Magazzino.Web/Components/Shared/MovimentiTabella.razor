@@ -1,0 +1,70 @@
+@inject IDbContextFactory<MagazzinoDbContext> Dbf
+@inject Operazioni Op
+
+<Avviso Errore="@errore" Ok="@ok" />
+@if (movimenti is null) { <p class="muted">Caricamento...</p> }
+else if (movimenti.Count == 0) { <p class="muted">Nessun movimento.</p> }
+else
+{
+    <table>
+        <thead><tr><th>Numero</th><th>Data</th><th>Tipo</th><th>Ricambio</th><th>Da</th><th>A</th><th class="n">Quantita'</th><th>Documento</th><th>Utente</th><th></th></tr></thead>
+        <tbody>
+            @foreach (var m in movimenti)
+            {
+                <tr class="@(m.Stornato ? "muted" : "")">
+                    <td>@m.Numero</td>
+                    <td>@Formato.DataOra(m.Data)</td>
+                    <td>@Formato.Tipo(m.Tipo)@(m.Stornato ? " (stornato)" : "")</td>
+                    <td><a href="ricambi/@m.RicambioId">@m.Ricambio?.Codice</a></td>
+                    <td>@Ubi(m.UbicazioneDaId)</td>
+                    <td>@Ubi(m.UbicazioneAId)</td>
+                    <td class="n">@Formato.Q(m.Quantita)</td>
+                    <td>@m.TipoDocumento @m.Note</td>
+                    <td>@m.Utente</td>
+                    <td>@if (!m.Stornato && m.Tipo is not (TipoMovimento.Storno or TipoMovimento.Apertura or TipoMovimento.ScaricoIntervento or TipoMovimento.CaricoFornitore)) {<button class="btn sm danger" @onclick="() => Storna(m.Id)">Storna</button>}</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [Parameter] public int? RicambioId { get; set; }
+    [Parameter] public int Massimo { get; set; } = 200;
+    [Parameter] public TipoMovimento? Tipo { get; set; }
+    private List<Movimento>? movimenti;
+    private Dictionary<int, string> ubicazioni = [];
+    private string? errore, ok;
+
+    private string Ubi(int? id) => id is int i && ubicazioni.TryGetValue(i, out var c) ? c : "";
+
+    protected override Task OnParametersSetAsync() => Carica();
+
+    private async Task Carica()
+    {
+        await using var db = await Dbf.CreateDbContextAsync();
+        ubicazioni = await db.Ubicazioni.ToDictionaryAsync(u => u.Id, u => u.Codice);
+        var q = db.Movimenti.Include(m => m.Ricambio).AsQueryable();
+        if (RicambioId is int r) q = q.Where(m => m.RicambioId == r);
+        if (Tipo is TipoMovimento t) q = q.Where(m => m.Tipo == t);
+        movimenti = await q.OrderByDescending(m => m.Id).Take(Massimo).ToListAsync();
+    }
+
+    // Carichi e scarichi per intervento si annullano dal loro documento (reso, rettifica), non da qui.
+    private async Task Storna(int id)
+    {
+        errore = ok = null;
+        try
+        {
+            await Op.EseguiAsync(async sp =>
+            {
+                var g = sp.GetRequiredService<GiacenzeService>();
+                await g.StornaAsync(id, UtenteCorrente.Nome, "Storno da elenco movimenti");
+                await sp.GetRequiredService<MagazzinoDbContext>().SaveChangesAsync();
+            });
+            ok = "Movimento stornato.";
+            await Carica();
+        }
+        catch (MagazzinoException ex) { errore = ex.Message; }
+    }
+}

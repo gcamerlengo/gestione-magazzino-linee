@@ -20,7 +20,7 @@ public class RiordinoService(MagazzinoDbContext db, Numeratore numeratore)
         var impegnato = (await db.BuoniPrelievo.Where(b => b.Stato == StatoBuono.Aperto).SelectMany(b => b.Righe)
                 .Select(r => new { r.RicambioId, r.Quantita }).ToListAsync())
             .GroupBy(r => r.RicambioId).ToDictionary(g => g.Key, g => g.Sum(x => x.Quantita));
-        var statiInArrivo = new[] { StatoOrdineFornitore.Inviato, StatoOrdineFornitore.Confermato, StatoOrdineFornitore.RicevutoInParte };
+        var statiInArrivo = new[] { StatoOrdineFornitore.Bozza, StatoOrdineFornitore.DaApprovare, StatoOrdineFornitore.Inviato, StatoOrdineFornitore.Confermato, StatoOrdineFornitore.RicevutoInParte };
         var inArrivo = (await db.RigheOrdineFornitore.Where(r => r.RicambioId != null && statiInArrivo.Contains(r.Ordine!.Stato))
                 .Select(r => new { r.RicambioId, r.Quantita, r.QuantitaRicevuta }).ToListAsync())
             .GroupBy(r => r.RicambioId!.Value).ToDictionary(g => g.Key, g => g.Sum(x => Math.Max(0, x.Quantita - x.QuantitaRicevuta)));

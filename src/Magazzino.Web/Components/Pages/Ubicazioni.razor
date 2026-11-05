@@ -1,0 +1,76 @@
+@page "/ubicazioni"
+@inject IDbContextFactory<MagazzinoDbContext> Dbf
+
+<PageTitle>Ubicazioni - Magazzino</PageTitle>
+<h1>Ubicazioni</h1>
+<Avviso Errore="@errore" Ok="@ok" />
+
+@if (edit is not null)
+{
+    <div class="panel">
+        <div class="form">
+            <label>Codice<input @bind="edit.Codice" placeholder="es. A-01-1" /></label>
+            <label>Magazzino<input @bind="edit.Magazzino" /></label>
+            <label>Scaffale<input @bind="edit.Scaffale" /></label>
+            <label>Ripiano<input @bind="edit.Ripiano" /></label>
+            <label>Cella<input @bind="edit.Cella" /></label>
+            <label>Descrizione<input @bind="edit.Descrizione" /></label>
+            <label class="check"><input type="checkbox" @bind="edit.Attiva" /> Attiva</label>
+        </div>
+        <button class="btn primary" @onclick="Salva">Salva</button>
+        <button class="btn" @onclick="() => edit = null">Annulla</button>
+    </div>
+}
+else
+{
+    <div class="toolbar"><span class="grow"></span><button class="btn primary" @onclick="() => edit = new Ubicazione()">Nuova ubicazione</button></div>
+}
+
+<table>
+    <thead><tr><th>Codice</th><th>Magazzino</th><th>Scaffale</th><th>Ripiano</th><th>Cella</th><th>Descrizione</th><th class="n">Ricambi presenti</th><th></th></tr></thead>
+    <tbody>
+        @foreach (var u in elenco)
+        {
+            <tr class="@(u.Attiva ? "" : "muted")"><td>@u.Codice</td><td>@u.Magazzino</td><td>@u.Scaffale</td><td>@u.Ripiano</td><td>@u.Cella</td><td>@u.Descrizione</td>
+                <td class="n">@presenti.GetValueOrDefault(u.Id)</td>
+                <td><button class="btn sm" @onclick="() => edit = Copia(u)">Modifica</button></td></tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    private List<Ubicazione> elenco = [];
+    private Dictionary<int, int> presenti = [];
+    private Ubicazione? edit;
+    private string? errore, ok;
+
+    protected override Task OnInitializedAsync() => Carica();
+
+    private async Task Carica()
+    {
+        await using var db = await Dbf.CreateDbContextAsync();
+        elenco = await db.Ubicazioni.AsNoTracking().OrderBy(u => u.Codice).ToListAsync();
+        presenti = await db.Giacenze.Where(g => g.Quantita > 0).GroupBy(g => g.UbicazioneId).Select(g => new { g.Key, N = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.N);
+    }
+
+    private static Ubicazione Copia(Ubicazione u) => new()
+    {
+        Id = u.Id, Codice = u.Codice, Magazzino = u.Magazzino, Scaffale = u.Scaffale, Ripiano = u.Ripiano, Cella = u.Cella,
+        Descrizione = u.Descrizione, Attiva = u.Attiva, IdOrigine = u.IdOrigine, CreatedAt = u.CreatedAt
+    };
+
+    private async Task Salva()
+    {
+        errore = ok = null;
+        edit!.Codice = edit.Codice.Trim().ToUpperInvariant();
+        if (edit.Codice == "") { errore = "Il codice e' obbligatorio."; return; }
+        if (!edit.Attiva && presenti.GetValueOrDefault(edit.Id) > 0) { errore = "L'ubicazione contiene ancora ricambi: spostali prima di disattivarla."; return; }
+        await using var db = await Dbf.CreateDbContextAsync();
+        if (await db.Ubicazioni.AnyAsync(u => u.Codice == edit.Codice && u.Id != edit.Id)) { errore = "Codice gia' usato."; return; }
+        if (edit.Id == 0) db.Ubicazioni.Add(edit); else db.Ubicazioni.Update(edit);
+        await db.SaveChangesAsync();
+        ok = $"Ubicazione {edit.Codice} salvata.";
+        edit = null;
+        await Carica();
+    }
+}
