@@ -1,7 +1,7 @@
 @page "/t/interventi/{Id:int}"
 @inject IDbContextFactory<MagazzinoDbContext> Dbf
 @inject Operazioni Op
-@inject TecnicoCorrente Tecnico
+@inject UtenteCorrente Utente
 @inject IConfiguration Config
 
 <PageTitle>Intervento</PageTitle>
@@ -89,8 +89,8 @@ else
         errore = ok = null;
         try
         {
-            await Tecnico.CaricaAsync();
-            await Op.EseguiAsync(sp => sp.GetRequiredService<ScaricoService>().RendiAsync(r.Id, qtaReso, Tecnico.Nome ?? "tecnico"));
+            var chi = await Utente.NomeAsync();
+            await Op.EseguiAsync(sp => sp.GetRequiredService<ScaricoService>().RendiAsync(r.Id, qtaReso, chi));
             ok = $"{Formato.Q(qtaReso)} {r.Ricambio?.Codice} rimessi in magazzino.";
             resoRiga = 0;
         }

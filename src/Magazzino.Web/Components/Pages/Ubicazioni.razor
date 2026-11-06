@@ -1,4 +1,5 @@
 @page "/ubicazioni"
+@attribute [Authorize(Policy = Permessi.Ufficio)]
 @inject IDbContextFactory<MagazzinoDbContext> Dbf
 
 <PageTitle>Ubicazioni - Magazzino</PageTitle>

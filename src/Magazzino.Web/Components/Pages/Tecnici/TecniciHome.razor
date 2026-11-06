@@ -1,36 +1,28 @@
 @page "/t"
-@inject TecnicoCorrente Tecnico
+@inject UtenteCorrente Utente
 @inject NavigationManager Nav
 
 <PageTitle>Magazzino - Tecnici</PageTitle>
-<ChiediNome Impostato="StateHasChanged" />
 
-@if (!string.IsNullOrEmpty(Tecnico.Nome))
-{
-    <div class="card">
-        <div class="big">Prelevare un pezzo</div>
-        <ol style="padding-left:1.2rem; margin:.6rem 0">
-            <li>Apri la fotocamera del telefono</li>
-            <li>Inquadra il QR sulla scatola</li>
-            <li>Tocca il link che compare</li>
-        </ol>
-        <p class="muted">Se il QR e' rovinato, scrivi il codice stampato sotto (es. SC-000012):</p>
-        <div class="field"><input placeholder="Codice scatola" @bind="codice" @bind:event="oninput" @onkeyup="Invio" /></div>
-        <button class="btn primary block" disabled="@string.IsNullOrWhiteSpace(codice)" @onclick="Apri">Apri scatola</button>
-    </div>
-    <a class="btn block" href="t/interventi">I miei interventi in corso</a>
-    <p class="muted" style="text-align:center">Sei <strong>@Tecnico.Nome</strong>. <a href="" @onclick="Cambia" @onclick:preventDefault>Non sei tu?</a></p>
-}
+<div class="card">
+    <div class="big">Prelevare un pezzo</div>
+    <ol style="padding-left:1.2rem; margin:.6rem 0">
+        <li>Apri la fotocamera del telefono</li>
+        <li>Inquadra il QR sulla scatola</li>
+        <li>Tocca il link che compare</li>
+    </ol>
+    <p class="muted">Se il QR e' rovinato, scrivi il codice stampato sotto (es. SC-000012):</p>
+    <div class="field"><input placeholder="Codice scatola" @bind="codice" @bind:event="oninput" @onkeyup="Invio" /></div>
+    <button class="btn primary block" disabled="@string.IsNullOrWhiteSpace(codice)" @onclick="Apri">Apri scatola</button>
+</div>
+<a class="btn block" href="t/interventi">I miei interventi in corso</a>
+<p class="muted" style="text-align:center">Sei <strong>@nome</strong>. Non sei tu? Tocca "Esci" in alto.</p>
 
 @code {
-    private string codice = "";
+    private string codice = "", nome = "";
 
-    protected override async Task OnAfterRenderAsync(bool first)
-    {
-        if (first) { await Tecnico.CaricaAsync(); StateHasChanged(); }
-    }
+    protected override async Task OnInitializedAsync() => nome = await Utente.NomeAsync();
 
     private void Apri() => Nav.NavigateTo($"t/s/{Uri.EscapeDataString(ScatoleService.CodiceDaQr(codice))}");
     private void Invio(KeyboardEventArgs e) { if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(codice)) Apri(); }
-    private async Task Cambia() { await Tecnico.ImpostaAsync(""); StateHasChanged(); }
 }

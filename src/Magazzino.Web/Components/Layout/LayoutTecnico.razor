@@ -4,8 +4,13 @@
     <header class="mob-top">
         <a href="t" class="mob-brand">Magazzino</a>
         <a href="t/interventi" class="mob-link">I miei interventi</a>
+        <AuthorizeView Policy="@Permessi.Ufficio"><a href="" class="mob-link">Ufficio</a></AuthorizeView>
+        <Esci Classe="mob-esci" />
     </header>
     <main class="mob-body">@Body</main>
+    <AuthorizeView>
+        <footer class="mob-foot muted">@context.User.Identity?.Name - <a href="t/password">cambia PIN</a></footer>
+    </AuthorizeView>
 </div>
 
 <div id="blazor-error-ui">

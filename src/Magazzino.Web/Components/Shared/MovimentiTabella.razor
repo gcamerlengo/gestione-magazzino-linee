@@ -1,3 +1,4 @@
+@inject UtenteCorrente Utente
 @inject IDbContextFactory<MagazzinoDbContext> Dbf
 @inject Operazioni Op
 
@@ -54,12 +55,13 @@ else
     private async Task Storna(int id)
     {
         errore = ok = null;
+        var chi = await Utente.NomeAsync();
         try
         {
             await Op.EseguiAsync(async sp =>
             {
                 var g = sp.GetRequiredService<GiacenzeService>();
-                await g.StornaAsync(id, UtenteCorrente.Nome, "Storno da elenco movimenti");
+                await g.StornaAsync(id, chi, "Storno da elenco movimenti");
                 await sp.GetRequiredService<MagazzinoDbContext>().SaveChangesAsync();
             });
             ok = "Movimento stornato.";

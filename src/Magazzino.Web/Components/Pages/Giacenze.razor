@@ -1,4 +1,6 @@
 @page "/giacenze"
+@attribute [Authorize(Policy = Permessi.Ufficio)]
+@inject UtenteCorrente Utente
 @inject IDbContextFactory<MagazzinoDbContext> Dbf
 @inject Operazioni Op
 
@@ -78,13 +80,14 @@ else
     {
         errore = ok = null;
         var g = inTrasf!;
+        var chi = await Utente.NomeAsync();
         try
         {
             await Op.EseguiAsync(async sp =>
             {
                 var db = sp.GetRequiredService<MagazzinoDbContext>();
                 var ric = await db.Ricambi.FindAsync(g.RicambioId) ?? throw new MagazzinoException("Ricambio inesistente.");
-                await sp.GetRequiredService<GiacenzeService>().TrasferisciAsync(ric, g.UbicazioneId, versoId, qtaTrasf, UtenteCorrente.Nome);
+                await sp.GetRequiredService<GiacenzeService>().TrasferisciAsync(ric, g.UbicazioneId, versoId, qtaTrasf, chi);
                 await db.SaveChangesAsync();
             });
             ok = "Trasferimento registrato.";

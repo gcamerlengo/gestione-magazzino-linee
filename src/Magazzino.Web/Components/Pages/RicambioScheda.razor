@@ -1,5 +1,6 @@
 @page "/ricambi/nuovo"
 @page "/ricambi/{Id:int}"
+@attribute [Authorize(Policy = Permessi.Ufficio)]
 @inject IDbContextFactory<MagazzinoDbContext> Dbf
 @inject NavigationManager Nav
 

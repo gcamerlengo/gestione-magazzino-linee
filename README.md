@@ -90,11 +90,35 @@ Configurazione in `appsettings.json`, sezione `Magazzino`:
   Va impostato prima di stampare le etichette, perche' finisce dentro il QR.
 - `CostoOrario`: costo orario della manodopera per gli interventi.
 
-Gli accessi con utente e ruolo arrivano nel prossimo passo: per ora le operazioni sono registrate con l'utente `ufficio`.
+## Accessi e ruoli
+
+Ogni persona entra con il suo nome utente; il suo nome viene registrato su movimenti, ordini,
+prelievi e interventi.
+
+| Ruolo | Cosa puo' fare |
+|---|---|
+| Tecnico | Solo l'app dal telefono (`/t`): prelievi con QR, resi, chiusura interventi. Entra con un PIN di almeno 4 cifre. |
+| Ufficio | Tutte le pagine dell'ufficio e l'app tecnici. Password di almeno 8 caratteri. |
+| Responsabile | Come ufficio, e in piu' approva gli ordini sopra soglia. |
+| Amministratore | Tutto, e gestisce utenti e ruoli dalla pagina **Utenti e ruoli**. |
+
+- **Primo avvio:** se non esiste ancora nessun amministratore, la pagina di accesso chiede di crearlo.
+  Farlo subito dopo l'installazione.
+- Sul telefono l'accesso resta valido 30 giorni: il tecnico inserisce il PIN una volta sola.
+  Se un QR viene inquadrato senza aver fatto l'accesso, dopo il PIN si apre direttamente quella scatola.
+- Se l'amministratore disattiva un utente, gli cambia ruolo o password, le sessioni aperte
+  (anche sui telefoni) si chiudono alla richiesta successiva.
+- Ci deve sempre essere almeno un amministratore attivo.
+- Le password sono salvate solo come hash (PBKDF2). Il cookie di accesso e' cifrato con le chiavi
+  di ASP.NET Core Data Protection, salvate nel profilo dell'utente che esegue il servizio: se le
+  chiavi vanno perse, tutti devono solo rientrare.
+- Gli utenti del vecchio programma non vengono importati: si ricreano qui con i nuovi ruoli.
 
 ## Piano
 
 1. Modello dati e progetto (questo scheletro)
 2. Importazione da Gestione Manutenzione (`manutenzione.db`)
 3. Gestione ordini per l'ufficio
-4. App per i tecnici e avvio
+4. App per i tecnici con QR sulle scatole
+5. Accessi con utente e ruoli
+6. Avvio sul server e importazione vera

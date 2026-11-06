@@ -93,3 +93,20 @@ input[type=number] { width: 7rem; text-align: right; }
     .shell { display: block; } .content { padding: 0; max-width: none; }
     .label { border: none; page-break-inside: avoid; }
 }
+
+/* Accessi */
+.nav .nav-user { margin-top: auto; padding: 1rem .5rem 0; border-top: 1px solid #2a3a5c; color: #d6dcea; display: flex; flex-direction: column; gap: .4rem; font-size: .9rem; }
+.nav .nav-user a { padding: .2rem 0; }
+@media (max-width: 800px) { .nav .nav-user { margin-top: 0; border-top: 0; padding: 0 .5rem; flex-direction: row; align-items: center; } }
+form.esci { margin: 0; display: inline; }
+.mob-top { gap: .8rem; }
+.mob-top .mob-brand { margin-right: auto; }
+.mob-esci { font: inherit; background: none; border: 1px solid #50607e; color: #fff; border-radius: 6px; padding: .25rem .6rem; cursor: pointer; }
+.mob-foot { text-align: center; padding: 0 1rem 1.5rem; font-size: .85rem; }
+.accesso-wrap { min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 12vh 16px 2rem; background: #17233a; }
+.accesso { width: 100%; max-width: 380px; background: var(--panel); border-radius: 12px; padding: 1.5rem; }
+.accesso .brand-acc { font-weight: 700; color: var(--accent); margin-bottom: 1rem; }
+.accesso h1 { font-size: 1.3rem; }
+.accesso .field label { display: flex; flex-direction: column; gap: .3rem; width: 100%; }
+.accesso .validation-errors { color: var(--err); padding-left: 1.2rem; font-size: .9rem; }
+.accesso .validation-message { color: var(--err); font-size: .85rem; }
