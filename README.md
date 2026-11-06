@@ -114,6 +114,28 @@ prelievi e interventi.
   chiavi vanno perse, tutti devono solo rientrare.
 - Gli utenti del vecchio programma non vengono importati: si ricreano qui con i nuovi ruoli.
 
+## Installazione su Windows
+
+Il setup `Magazzino-ricambi-setup-x.y.z.exe` si scarica da GitHub: **Actions > Setup Windows >**
+l'ultima esecuzione verde > **Artifacts** (oppure dalle Release, quando c'e' un tag `v*`).
+
+1. Sul PC che fa da centrale (resta acceso in orario di lavoro) lanciare il setup come amministratore.
+   Installa programma e database PostgreSQL, i servizi che partono all'accensione, la porta 5080
+   nel firewall per la rete aziendale e l'icona **Magazzino ricambi** sul desktop.
+2. Aprire l'icona e creare l'amministratore (prima pagina). Poi da **Utenti e ruoli** creare ufficio e tecnici.
+3. Facoltativo: menu Start > **Magazzino ricambi > Importa dati da Gestione Manutenzione**, scegliere
+   `manutenzione.db`. Prima fa una prova e mostra il resoconto, poi chiede conferma. Si fa una volta sola,
+   su database vuoto (si puo' fare anche dopo aver creato gli utenti).
+4. Telefoni e altri PC: aprire `http://<IP del PC>:5080` (l'indirizzo esatto e' in
+   `C:\ProgramData\MagazzinoRicambi\impostazioni.json`, voce `IndirizzoPubblico`, che finisce anche nei QR).
+   Conviene dare al PC un IP fisso, altrimenti i QR stampati smettono di funzionare se l'IP cambia.
+
+Dati, impostazioni, password del database (`credenziali-database.txt`) e backup stanno in
+`C:\ProgramData\MagazzinoRicambi`. Backup automatico ogni sera alle 21:00 (ultimi 30), o dal menu
+Start con **Backup adesso**: copiare ogni tanto la cartella `backup` anche su un altro disco.
+Per aggiornare si lancia il setup nuovo sopra quello vecchio; la disinstallazione toglie il programma
+ma lascia i dati.
+
 ## Piano
 
 1. Modello dati e progetto (questo scheletro)
