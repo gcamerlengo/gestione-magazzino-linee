@@ -53,13 +53,15 @@ Filename: "{app}\Magazzino ricambi.url"; Description: "Apri Magazzino ricambi"; 
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\disinstalla.ps1"" -Cartella ""{app}"""; Flags: runhidden waituntilterminated; RunOnceId: "TogliServizi"
 
 [Code]
-// Prima di copiare i file nuovi si ferma il programma, altrimenti i file sono bloccati.
+// Prima di copiare i file nuovi si fermano i servizi, altrimenti i file sono bloccati.
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Codice: Integer;
 begin
-  Exec(ExpandConstant('{sys}\sc.exe'), 'stop MagazzinoRicambi', '', SW_HIDE, ewWaitUntilTerminated, Codice);
-  Sleep(3000);
+  // Prima il programma, poi il database (che tiene aperti i file di pgsql). Si aspetta che siano fermi davvero.
+  Exec('powershell.exe', '-NoProfile -Command "foreach ($s in ''MagazzinoRicambi'',''MagazzinoDatabase'') { if (Get-Service $s -ErrorAction SilentlyContinue) { Stop-Service $s -Force; (Get-Service $s).WaitForStatus(''Stopped'', ''00:01:00'') } }"',
+       '', SW_HIDE, ewWaitUntilTerminated, Codice);
+  Sleep(1000);
   Result := '';
 end;
 
