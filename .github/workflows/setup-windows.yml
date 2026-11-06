@@ -1,0 +1,108 @@
+name: Setup Windows
+# Costruisce il setup (programma + PostgreSQL) e lo prova davvero su Windows:
+# installazione, programma che risponde, backup, aggiornamento sopra l'installazione, disinstallazione.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+env:
+  PG_ZIP: https://get.enterprisedb.com/postgresql/postgresql-16.4-1-windows-x64-binaries.zip
+
+jobs:
+  setup:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Versione
+        id: v
+        shell: pwsh
+        run: |
+          $v = if ($env:GITHUB_REF -like 'refs/tags/v*') { $env:GITHUB_REF_NAME.TrimStart('v') } else { "0.1.$env:GITHUB_RUN_NUMBER" }
+          "versione=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Pubblica programma e importatore
+        shell: pwsh
+        run: |
+          dotnet publish src/Magazzino.Web -c Release -r win-x64 --self-contained -o out/programma -p:Version=${{ steps.v.outputs.versione }}
+          dotnet publish src/Magazzino.Import -c Release -r win-x64 --self-contained -o out/importa -p:Version=${{ steps.v.outputs.versione }}
+
+      - name: PostgreSQL (solo i file che servono)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest $env:PG_ZIP -OutFile pg.zip
+          Expand-Archive pg.zip -DestinationPath pgtmp
+          New-Item -ItemType Directory out/pgsql | Out-Null
+          foreach ($d in 'bin', 'lib', 'share') { Copy-Item -Recurse "pgtmp/pgsql/$d" "out/pgsql/$d" }
+          Remove-Item -Recurse -Force out/pgsql/bin/*.pdb, out/pgsql/lib/*.pdb -ErrorAction SilentlyContinue
+          Get-ChildItem out/pgsql -Recurse | Measure-Object Length -Sum | ForEach-Object { 'PostgreSQL: {0:N0} MB' -f ($_.Sum / 1MB) }
+
+      - name: Compila il setup
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; }
+          & $iscc /DVersione=${{ steps.v.outputs.versione }} /DSorgente=..\out installer\Magazzino.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Get-ChildItem out/setup
+
+      - name: Prova - installazione
+        shell: pwsh
+        run: |
+          $setup = (Get-ChildItem out/setup/*.exe).FullName
+          $p = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/LOG=install.log' -Wait -PassThru
+          Get-Content C:\ProgramData\MagazzinoRicambi\log\installazione.log -ErrorAction SilentlyContinue
+          if ($p.ExitCode -ne 0) { Get-Content install.log -Tail 40; exit 1 }
+          Get-Service MagazzinoDatabase, MagazzinoRicambi | Format-Table Name, Status, StartType
+          if ((Get-Service MagazzinoRicambi).Status -ne 'Running') { exit 1 }
+          $r = Invoke-WebRequest http://localhost:5080/accesso -UseBasicParsing
+          if ($r.Content -notmatch 'Primo avvio') { Write-Error 'La pagina di accesso non chiede di creare l''amministratore'; exit 1 }
+          'Pagina di accesso OK (primo avvio)'
+          if (-not (Test-Path 'C:\Users\Public\Desktop\Magazzino ricambi.lnk')) { Write-Error 'Manca l''icona sul desktop'; exit 1 }
+
+      - name: Prova - backup
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Program Files\Magazzino ricambi\backup.ps1" -Cartella "C:\Program Files\Magazzino ricambi"
+          if (-not (Get-ChildItem C:\ProgramData\MagazzinoRicambi\backup\*.backup)) { Write-Error 'Backup non creato'; exit 1 }
+          Get-ChildItem C:\ProgramData\MagazzinoRicambi\backup
+
+      - name: Prova - aggiornamento sopra l'installazione
+        shell: pwsh
+        run: |
+          $setup = (Get-ChildItem out/setup/*.exe).FullName
+          $p = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/LOG=update.log' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content update.log -Tail 40; exit 1 }
+          $r = Invoke-WebRequest http://localhost:5080/accesso -UseBasicParsing
+          if ($r.StatusCode -ne 200) { exit 1 }
+          'Aggiornamento OK'
+
+      - name: Prova - disinstallazione (i dati restano)
+        shell: pwsh
+        run: |
+          $p = Start-Process 'C:\Program Files\Magazzino ricambi\unins000.exe' -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES' -Wait -PassThru
+          Start-Sleep -Seconds 5
+          if (Get-Service MagazzinoRicambi -ErrorAction SilentlyContinue) { Write-Error 'Servizio non rimosso'; exit 1 }
+          if (-not (Test-Path C:\ProgramData\MagazzinoRicambi\database\PG_VERSION)) { Write-Error 'Dati persi'; exit 1 }
+          'Disinstallazione OK, dati conservati'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Magazzino-ricambi-setup-${{ steps.v.outputs.versione }}
+          path: out/setup/*.exe
+          if-no-files-found: error
+
+      - name: Pubblica come release (solo sui tag v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create $env:GITHUB_REF_NAME (Get-ChildItem out/setup/*.exe).FullName --title "Magazzino ricambi $env:GITHUB_REF_NAME" --notes "Setup per Windows (programma + database)."
+    permissions:
+      contents: write
