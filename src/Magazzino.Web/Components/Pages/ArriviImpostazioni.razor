@@ -1,0 +1,74 @@
+@page "/arrivi/impostazioni"
+@attribute [Authorize(Policy = Permessi.Amministrare)]
+@inject CollegamentoRisolvo Risolvo
+
+<PageTitle>Collegamento Risolvo - Magazzino</PageTitle>
+<h1>Collegamento con Risolvo</h1>
+<Avviso Errore="@errore" Ok="@ok" />
+
+@if (m is null) { <p class="muted">Caricamento...</p> return; }
+
+<div class="panel">
+    <p class="muted">Ogni 5 minuti il programma legge da Risolvo le richieste materiale chiuse come "ricevuto" e le mette in
+        <a href="arrivi">Arrivi da Risolvo</a>. In Risolvo non viene modificato nulla.</p>
+    <div class="form">
+        <label class="check"><input type="checkbox" @bind="m.Attivo" /> Collegamento attivo</label>
+        <label>Indirizzo di Risolvo<input @bind="m.Indirizzo" placeholder="http://192.168.1.87:3001" /></label>
+        <label>Email dell'utente Risolvo (con permesso materiali)<input @bind="m.Email" autocomplete="off" /></label>
+        <label>Password<input type="password" @bind="m.Password" autocomplete="new-password" placeholder="@(haPassword ? "(salvata: lascia vuoto per non cambiarla)" : "")" /></label>
+        <label>Leggi gli arrivi a partire dal<input type="date" @bind="m.DaData" /></label>
+        <label class="check"><input type="checkbox" @bind="m.CaricaSeCerto" /> Carica da solo quando l'articolo e' riconosciuto con certezza</label>
+    </div>
+    <p class="muted">"Con certezza" vuol dire: nel testo di Risolvo c'e' il codice di un solo ricambio, oppure lo stesso testo e' gia' stato confermato in passato.
+        Tutti gli altri arrivi restano da confermare. La password e' salvata cifrata.</p>
+    <button class="btn primary" disabled="@occupato" @onclick="Salva">Salva</button>
+    <button class="btn" disabled="@occupato" @onclick="Prova">Prova collegamento</button>
+</div>
+
+@code {
+    private Modulo? m;
+    private bool haPassword, occupato;
+    private string? errore, ok;
+
+    private sealed class Modulo
+    {
+        public bool Attivo { get; set; }
+        public string Indirizzo { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string Password { get; set; } = "";
+        public DateTime DaData { get; set; }
+        public bool CaricaSeCerto { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var i = await Risolvo.LeggiAsync();
+        haPassword = i.Password != "";
+        m = new Modulo { Attivo = i.Attivo, Indirizzo = i.Indirizzo, Email = i.Email, DaData = i.DaData, CaricaSeCerto = i.CaricaSeCerto };
+    }
+
+    private async Task<ImpostazioniRisolvo> Impostazioni()
+    {
+        var pw = m!.Password != "" ? m.Password : (await Risolvo.LeggiAsync()).Password;
+        return new ImpostazioniRisolvo(m.Attivo, m.Indirizzo, m.Email, pw, m.DaData, m.CaricaSeCerto);
+    }
+
+    private async Task Salva()
+    {
+        errore = ok = null;
+        if (!Uri.TryCreate(m!.Indirizzo.Trim(), UriKind.Absolute, out _)) { errore = "Indirizzo non valido (es. http://192.168.1.87:3001)."; return; }
+        await Risolvo.SalvaAsync(await Impostazioni());
+        haPassword = haPassword || m.Password != "";
+        m.Password = "";
+        ok = m.Attivo ? "Salvato. Il primo controllo parte entro 5 minuti (o subito da Arrivi > Controlla adesso)." : "Salvato. Il collegamento e' spento.";
+    }
+
+    private async Task Prova()
+    {
+        errore = ok = null;
+        occupato = true;
+        try { ok = await Risolvo.ProvaAsync(await Impostazioni()); }
+        catch (Exception ex) { errore = "Collegamento non riuscito: " + CollegamentoRisolvo.Spiega(ex); }
+        finally { occupato = false; }
+    }
+}

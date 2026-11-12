@@ -1,0 +1,158 @@
+@page "/arrivi"
+@attribute [Authorize(Policy = Permessi.Ufficio)]
+@inject IDbContextFactory<MagazzinoDbContext> Dbf
+@inject Operazioni Op
+@inject UtenteCorrente Utente
+@inject CollegamentoRisolvo Risolvo
+
+<PageTitle>Arrivi da Risolvo - Magazzino</PageTitle>
+<h1>Arrivi da Risolvo</h1>
+<Avviso Errore="@errore" Ok="@ok" />
+
+<div class="toolbar">
+    <span class="grow muted">
+        Richieste materiale chiuse come "ricevuto" in Risolvo. Controlla articolo, quantita' e ubicazione e carica in magazzino.
+        @if (Risolvo.UltimoEsito is { } e) { <br /><span class="@(e.Riuscita ? "" : "err")">Ultimo controllo @Formato.DataOra(e.Quando): @e.Messaggio</span> }
+    </span>
+    <button class="btn" disabled="@occupato" @onclick="Sincronizza">Controlla adesso</button>
+    <AuthorizeView Policy="@Permessi.Amministrare"><a class="btn" href="arrivi/impostazioni">Impostazioni</a></AuthorizeView>
+</div>
+
+@if (daConfermare is null) { <p class="muted">Caricamento...</p> return; }
+
+<h2>Da confermare (@daConfermare.Count)</h2>
+@if (daConfermare.Count == 0) { <p class="muted">Nessun arrivo da confermare.</p> }
+else
+{
+    <datalist id="ricambi">
+        @foreach (var r in ricambi) { <option value="@Etichetta(r)"></option> }
+    </datalist>
+    <table>
+        <thead><tr><th>Richiesta</th><th>Scritto in Risolvo</th><th>Ricambio</th><th class="n">Quantita'</th><th>Ubicazione</th><th></th></tr></thead>
+        <tbody>
+            @foreach (var a in daConfermare)
+            {
+                var m = moduli[a.Id];
+                <tr>
+                    <td><strong>@a.Numero</strong><div class="muted">@Formato.Data(a.RicevutoIl)</div></td>
+                    <td>@a.Materiale<div class="muted">@a.QuantitaTesto @(a.FornitoreTesto == "" ? "" : $"· {a.FornitoreTesto}") @(a.Luogo == "" ? "" : $"· {a.Luogo}")</div></td>
+                    <td>
+                        <input list="ricambi" @bind="m.Ricambio" @bind:event="oninput" placeholder="Cerca codice o descrizione" style="min-width:16rem" />
+                        <div class="muted">@(a.ComeRiconosciuto)</div>
+                    </td>
+                    <td class="n"><input type="number" step="any" min="0" @bind="m.Quantita" style="width:6rem" /></td>
+                    <td>
+                        <select @bind="m.UbicazioneId">
+                            <option value="0">Scegli...</option>
+                            @foreach (var u in ubicazioni) { <option value="@u.Id">@u.Codice</option> }
+                        </select>
+                    </td>
+                    <td style="white-space:nowrap">
+                        <button class="btn primary sm" disabled="@occupato" @onclick="() => Conferma(a)">Carica</button>
+                        <button class="btn sm" disabled="@occupato" @onclick="() => Scarta(a)">Non va a magazzino</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    <p class="muted">"Carica" registra il carico e ricorda l'abbinamento: la prossima volta lo stesso testo viene riconosciuto da solo. "Non va a magazzino" e' per materiale di consumo o servizi.</p>
+}
+
+<h2>Ultimi gestiti</h2>
+@if (gestiti.Count == 0) { <p class="muted">Ancora nessuno.</p> }
+else
+{
+    <table>
+        <thead><tr><th>Richiesta</th><th>Scritto in Risolvo</th><th>Esito</th><th>Da</th><th>Quando</th></tr></thead>
+        <tbody>
+            @foreach (var a in gestiti)
+            {
+                <tr class="@(a.Stato == StatoArrivoEsterno.Scartato ? "muted" : "")">
+                    <td>@a.Numero</td>
+                    <td>@a.Materiale <span class="muted">(@a.QuantitaTesto)</span></td>
+                    <td>@if (a.Stato == StatoArrivoEsterno.Caricato) { <span>Caricati @Formato.Q(a.Quantita ?? 0) di <strong>@a.Ricambio?.Codice</strong> in @a.Ubicazione?.Codice (@a.Ricevimento?.Numero)</span> }
+                        else { <span>Non caricato @(a.Note == "" ? "" : $": {a.Note}")</span> }</td>
+                    <td>@a.GestitoDa</td>
+                    <td>@Formato.DataOra(a.GestitoIl)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<ArrivoEsterno>? daConfermare;
+    private List<ArrivoEsterno> gestiti = [];
+    private List<Ricambio> ricambi = [];
+    private List<Ubicazione> ubicazioni = [];
+    private Dictionary<int, Modulo> moduli = [];
+    private string? errore, ok;
+    private bool occupato;
+
+    private sealed class Modulo
+    {
+        public string Ricambio { get; set; } = "";
+        public decimal Quantita { get; set; }
+        public int UbicazioneId { get; set; }
+    }
+
+    private static string Etichetta(Ricambio r) => $"{r.Codice} | {r.Descrizione}";
+
+    protected override Task OnInitializedAsync() => Carica();
+
+    private async Task Carica()
+    {
+        await using var db = await Dbf.CreateDbContextAsync();
+        ricambi = await db.Ricambi.AsNoTracking().Where(r => r.Attivo).OrderBy(r => r.Codice).ToListAsync();
+        ubicazioni = await db.Ubicazioni.AsNoTracking().Where(u => u.Attiva).OrderBy(u => u.Codice).ToListAsync();
+        daConfermare = await db.ArriviEsterni.AsNoTracking().Include(a => a.Ricambio)
+            .Where(a => a.Stato == StatoArrivoEsterno.DaConfermare).OrderBy(a => a.RicevutoIl).ThenBy(a => a.Id).ToListAsync();
+        gestiti = await db.ArriviEsterni.AsNoTracking().Include(a => a.Ricambio).Include(a => a.Ubicazione).Include(a => a.Ricevimento)
+            .Where(a => a.Stato != StatoArrivoEsterno.DaConfermare).OrderByDescending(a => a.GestitoIl).Take(30).ToListAsync();
+        foreach (var a in daConfermare.Where(a => !moduli.ContainsKey(a.Id)))
+            moduli[a.Id] = new Modulo { Ricambio = a.Ricambio is null ? "" : Etichetta(a.Ricambio), Quantita = a.Quantita ?? 0, UbicazioneId = a.UbicazioneId ?? 0 };
+    }
+
+    private async Task Conferma(ArrivoEsterno a)
+    {
+        errore = ok = null;
+        var m = moduli[a.Id];
+        var codice = m.Ricambio.Split(" | ")[0].Trim();
+        var ric = ricambi.FirstOrDefault(r => string.Equals(r.Codice, codice, StringComparison.OrdinalIgnoreCase));
+        if (ric is null) { errore = $"{a.Numero}: scegli il ricambio dall'elenco (se non esiste, crealo prima in Ricambi)."; return; }
+        if (m.UbicazioneId == 0) { errore = $"{a.Numero}: scegli l'ubicazione."; return; }
+        occupato = true;
+        try
+        {
+            var chi = await Utente.NomeAsync();
+            var r = await Op.EseguiAsync(sp => sp.GetRequiredService<ArriviService>().ConfermaAsync(a.Id, ric.Id, m.Quantita, m.UbicazioneId, chi));
+            ok = $"{a.Numero}: caricati {Formato.Q(m.Quantita)} {ric.UnitaMisura} di {ric.Codice} ({r.Numero}).";
+        }
+        catch (MagazzinoException ex) { errore = ex.Message; }
+        finally { occupato = false; }
+        await Carica();
+    }
+
+    private async Task Scarta(ArrivoEsterno a)
+    {
+        errore = ok = null;
+        try
+        {
+            var chi = await Utente.NomeAsync();
+            await Op.EseguiAsync(sp => sp.GetRequiredService<ArriviService>().ScartaAsync(a.Id, "segnato come non da magazzino", chi));
+            ok = $"{a.Numero}: segnato come non da magazzino.";
+        }
+        catch (MagazzinoException ex) { errore = ex.Message; }
+        await Carica();
+    }
+
+    private async Task Sincronizza()
+    {
+        errore = ok = null;
+        occupato = true;
+        var e = await Risolvo.SincronizzaAsync();
+        occupato = false;
+        if (e.Riuscita) ok = e.Messaggio; else errore = e.Messaggio;
+        await Carica();
+    }
+}

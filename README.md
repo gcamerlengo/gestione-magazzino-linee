@@ -136,6 +136,15 @@ Start con **Backup adesso**: copiare ogni tanto la cartella `backup` anche su un
 Per aggiornare si lancia il setup nuovo sopra quello vecchio; la disinstallazione toglie il programma
 ma lascia i dati.
 
+## Arrivi da Risolvo (programma guasti)
+
+Ogni 5 minuti il programma legge da Risolvo le richieste materiale chiuse come "ricevuto" e le mostra in **Arrivi da Risolvo**. In Risolvo non viene scritto nulla.
+
+- **Impostazioni** (solo amministratori): indirizzo di Risolvo (es. `http://192.168.1.87:3001`), email e password di un utente Risolvo con il permesso materiali, data da cui leggere. La password e' salvata cifrata. "Prova collegamento" verifica l'accesso senza registrare nulla.
+- **Carico da solo** quando l'articolo e' certo: nel testo di Risolvo c'e' il codice di un solo ricambio (codice interno, del costruttore o del fornitore), oppure lo stesso testo e' gia' stato confermato in passato. Serve anche una quantita' leggibile e un'ubicazione nota. Si puo' spegnere nelle impostazioni.
+- **Da confermare**: tutti gli altri arrivi. L'ufficio sceglie ricambio, quantita' e ubicazione e preme "Carica"; il programma ricorda l'abbinamento per la volta successiva. "Non va a magazzino" e' per consumabili e servizi.
+- Il carico crea un normale ricevimento (DDT = riferimento ordine di Risolvo o numero MAT) con il fornitore indicato in Risolvo; se il fornitore non esiste viene creato.
+
 ## Piano
 
 1. Modello dati e progetto (questo scheletro)

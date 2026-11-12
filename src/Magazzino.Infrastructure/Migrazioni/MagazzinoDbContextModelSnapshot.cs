@@ -466,6 +466,155 @@ namespace Magazzino.Infrastructure.Migrazioni
                     b.ToTable("Utenti");
                 });
 
+            modelBuilder.Entity("Magazzino.Domain.Carico.AbbinamentoMateriale", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RicambioId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TestoNormalizzato")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RicambioId");
+
+                    b.HasIndex("TestoNormalizzato")
+                        .IsUnique();
+
+                    b.ToTable("AbbinamentiMateriale");
+                });
+
+            modelBuilder.Entity("Magazzino.Domain.Carico.ArrivoEsterno", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("CaricatoInAutomatico")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("Certo")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ComeRiconosciuto")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FornitoreTesto")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("GestitoDa")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("GestitoIl")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("IdEsterno")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Luogo")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Materiale")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Numero")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal?>("Quantita")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("QuantitaTesto")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int?>("RicambioId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("RicevimentoId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("RicevutoIl")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RiferimentoOrdine")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Sorgente")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Stato")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("UbicazioneId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RicambioId");
+
+                    b.HasIndex("RicevimentoId");
+
+                    b.HasIndex("Stato");
+
+                    b.HasIndex("UbicazioneId");
+
+                    b.HasIndex("Sorgente", "IdEsterno")
+                        .IsUnique();
+
+                    b.ToTable("ArriviEsterni");
+                });
+
+            modelBuilder.Entity("Magazzino.Domain.Carico.Impostazione", b =>
+                {
+                    b.Property<string>("Chiave")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("AggiornataIl")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Valore")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Chiave");
+
+                    b.ToTable("Impostazioni");
+                });
+
             modelBuilder.Entity("Magazzino.Domain.Carico.OrdineFornitore", b =>
                 {
                     b.Property<int>("Id")
@@ -1142,6 +1291,38 @@ namespace Magazzino.Infrastructure.Migrazioni
                         .IsRequired();
 
                     b.Navigation("Ricambio");
+
+                    b.Navigation("Ubicazione");
+                });
+
+            modelBuilder.Entity("Magazzino.Domain.Carico.AbbinamentoMateriale", b =>
+                {
+                    b.HasOne("Magazzino.Domain.Anagrafiche.Ricambio", "Ricambio")
+                        .WithMany()
+                        .HasForeignKey("RicambioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Ricambio");
+                });
+
+            modelBuilder.Entity("Magazzino.Domain.Carico.ArrivoEsterno", b =>
+                {
+                    b.HasOne("Magazzino.Domain.Anagrafiche.Ricambio", "Ricambio")
+                        .WithMany()
+                        .HasForeignKey("RicambioId");
+
+                    b.HasOne("Magazzino.Domain.Carico.Ricevimento", "Ricevimento")
+                        .WithMany()
+                        .HasForeignKey("RicevimentoId");
+
+                    b.HasOne("Magazzino.Domain.Anagrafiche.Ubicazione", "Ubicazione")
+                        .WithMany()
+                        .HasForeignKey("UbicazioneId");
+
+                    b.Navigation("Ricambio");
+
+                    b.Navigation("Ricevimento");
 
                     b.Navigation("Ubicazione");
                 });

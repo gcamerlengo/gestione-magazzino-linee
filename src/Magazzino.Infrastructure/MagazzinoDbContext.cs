@@ -23,6 +23,9 @@ public class MagazzinoDbContext(DbContextOptions<MagazzinoDbContext> options) : 
     public DbSet<OrdineFornitore> OrdiniFornitore => Set<OrdineFornitore>();
     public DbSet<RigaOrdineFornitore> RigheOrdineFornitore => Set<RigaOrdineFornitore>();
     public DbSet<Ricevimento> Ricevimenti => Set<Ricevimento>();
+    public DbSet<ArrivoEsterno> ArriviEsterni => Set<ArrivoEsterno>();
+    public DbSet<AbbinamentoMateriale> AbbinamentiMateriale => Set<AbbinamentoMateriale>();
+    public DbSet<Impostazione> Impostazioni => Set<Impostazione>();
 
     public DbSet<BuonoPrelievo> BuoniPrelievo => Set<BuonoPrelievo>();
     public DbSet<Intervento> Interventi => Set<Intervento>();
@@ -50,6 +53,10 @@ public class MagazzinoDbContext(DbContextOptions<MagazzinoDbContext> options) : 
         b.Entity<RigaOrdineFornitore>().HasOne(x => x.Ordine).WithMany(x => x.Righe).HasForeignKey(x => x.OrdineFornitoreId);
         b.Entity<RichiestaAcquisto>().HasIndex(x => x.Numero).IsUnique();
         b.Entity<Ricevimento>().HasIndex(x => x.Numero).IsUnique();
+        b.Entity<ArrivoEsterno>().HasIndex(x => new { x.Sorgente, x.IdEsterno }).IsUnique();
+        b.Entity<ArrivoEsterno>().HasIndex(x => x.Stato);
+        b.Entity<AbbinamentoMateriale>().HasIndex(x => x.TestoNormalizzato).IsUnique();
+        b.Entity<Impostazione>().HasKey(x => x.Chiave);
 
         b.Entity<BuonoPrelievo>().HasIndex(x => x.Numero).IsUnique();
         b.Entity<Intervento>().HasIndex(x => x.Codice).IsUnique();
