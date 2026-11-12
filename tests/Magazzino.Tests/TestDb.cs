@@ -18,6 +18,7 @@ public sealed class TestDb : IDisposable
     public OrdiniService Ordini { get; }
     public ScatoleService Scatole { get; }
     public UtentiService Utenti { get; }
+    public ArriviService Arrivi { get; }
     public Linea Linea { get; }
     public Macchina Macchina { get; }
     public Fornitore Fornitore { get; }
@@ -38,6 +39,7 @@ public sealed class TestDb : IDisposable
         Ordini = new OrdiniService(Db, num);
         Scatole = new ScatoleService(Db, num);
         Utenti = new UtentiService(Db);
+        Arrivi = new ArriviService(Db, Carico);
 
         Linea = new Linea { Codice = "L1", Nome = "LINEA 1" };
         Macchina = new Macchina { Linea = Linea, CodiceAsset = "L1-RIEMP", Nome = "Riempitrice" };
