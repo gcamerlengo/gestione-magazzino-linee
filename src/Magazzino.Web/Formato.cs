@@ -12,6 +12,7 @@ public static class Formato
     public static string Euro(decimal v) => v.ToString("C", It);
     public static string Data(DateTime? d) => d is null ? "" : Locale(d.Value).ToString("dd/MM/yyyy", It);
     public static string DataOra(DateTime d) => Locale(d).ToString("dd/MM/yyyy HH:mm", It);
+    public static string DataOra(DateTime? d) => d is null ? "" : DataOra(d.Value);
     public static DateTime Locale(DateTime d) => d.Kind == DateTimeKind.Utc ? TimeZoneInfo.ConvertTimeFromUtc(d, Roma) : d;
 
     public static string Tipo(TipoMovimento t) => t switch

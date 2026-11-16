@@ -19,6 +19,7 @@ public static class DependencyInjection
         services.AddScoped<Operazioni>();
         services.AddScoped<ScatoleService>();
         services.AddScoped<UtentiService>();
+        services.AddScoped<ArriviService>();
         return services;
     }
 }

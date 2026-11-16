@@ -33,6 +33,10 @@ builder.Services.AddMagazzino(builder.Configuration.GetConnectionString("Magazzi
     ?? throw new InvalidOperationException("Manca la stringa di connessione 'Magazzino'."));
 builder.Services.AddSingleton<Magazzino.Web.IndirizziQr>();
 builder.Services.AddAccessi();
+builder.Services.AddHttpClient("risolvo", c => c.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddSingleton<CollegamentoRisolvo>();
+if (builder.Configuration.GetValue("Magazzino:SincronizzaRisolvo", true))
+    builder.Services.AddHostedService<SincronizzazioneRisolvo>();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
